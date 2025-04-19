@@ -1,0 +1,23 @@
+@use 'mixins' as mixins;
+
+html,
+body {
+	overflow-x: hidden;
+	min-height: 100vh;
+	font-family: var(--font-family);
+	font-size: var(--font-size-base);
+	color: var(--text-color-primary);
+	background-color: var(--background-color);
+}
+
+@include mixins.media-md {
+	:root {
+		--container-padding: 20px;
+	}
+}
+
+@include mixins.media-sm {
+	:root {
+		--container-padding: 10px;
+	}
+}

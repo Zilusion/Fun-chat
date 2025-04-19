@@ -1,0 +1,54 @@
+@use '../../styles/base/variables' as *;
+@use '../../styles/base/mixins' as *;
+
+.header {
+	background-color: var(--color-surface); // Белый фон
+	border-bottom: 1px solid var(--color-border); // Тонкая линия снизу
+	padding: 0 var(--container-padding); // Используем общие отступы контейнера
+	height: var(--header-height); // Фиксированная высота
+	box-shadow: var(--shadow-sm); // Небольшая тень
+}
+
+// Используем обертку .container для выравнивания контента
+.container {
+	height: 100%; // Растянуть на всю высоту хедера
+	display: flex;
+	align-items: center; // Вертикальное выравнивание по центру
+	justify-content: space-between; // Распределить элементы по краям
+	gap: 1rem; // Пространство между элементами
+}
+
+.user-info {
+	// Контейнер для "Пользователь: Имя"
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: var(--font-size-sm);
+	color: var(--color-text-secondary);
+
+	span {
+		font-weight: 600; // Делаем имя жирным
+		color: var(--color-text-primary);
+	}
+}
+
+.app-title {
+	// Название приложения "Веселый чатик"
+	font-size: var(--font-size-lg);
+	font-weight: 600;
+	color: var(--color-text-primary);
+	// Центрируем (может потребоваться доп. обертка или flex-grow для соседних элементов)
+	// пока просто оставляем как есть
+}
+
+.controls {
+	// Контейнер для кнопок справа
+	display: flex;
+	align-items: center;
+	gap: 0.75rem; // Расстояние между кнопками
+
+	// Можно задать стиль кнопок внутри хедера, если нужно
+	// :global(.button) { // Обращение к глобальному классу кнопки
+	//   padding: 0.5rem 1rem; // Сделать кнопки чуть меньше
+	// }
+}
