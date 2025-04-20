@@ -40,18 +40,17 @@ export class MainPage extends BaseComponent {
 	}
 
 	protected render(): void {
-		this.header = new HeaderComponent(
-			this.authService,
-			this.eventBus,
-			this.stateService,
-		);
+		this.header = new HeaderComponent(this.eventBus, this.stateService);
+		this.header.addClass(classes['header']);
 
 		this.contacts = new ContactsComponent(this.eventBus, this.stateService);
+		this.contacts.addClass(classes['contacts']);
 		this.chatArea = new ChatAreaComponent(
 			this.eventBus,
 			this.stateService,
 			this.messageService,
 		);
+		this.chatArea.addClass(classes['chat-area']);
 		this.element.append(
 			this.header.getElement(),
 			this.contacts.getElement(),

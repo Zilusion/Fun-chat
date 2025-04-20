@@ -15,9 +15,9 @@ import { MessageService } from './services/message-service';
 // --- Инициализация сервисов ---
 const eventBus = new EventBus();
 const wsService = new WebSocketService('ws://127.0.0.1:4000/', eventBus);
-const stateService = new StateService(eventBus);
 const authService = new AuthService(wsService, eventBus);
 const messageService = new MessageService(wsService, eventBus);
+const stateService = new StateService(eventBus, messageService);
 
 let savedLogin: string | null = null;
 let savedPassword: string | null = null;

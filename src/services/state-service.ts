@@ -4,13 +4,16 @@ import type { ConnectionStatus } from './web-socket-service';
 import type { AppState } from '../types/state';
 import { getInitialAppState } from '../types/state';
 import type { UserInfo, MessageData } from '../types/api-types';
+import type { MessageService } from './message-service';
 
 export class StateService {
 	private readonly eventBus: EventBus;
 	private state: AppState = getInitialAppState();
+	private messageService: MessageService;
 
-	constructor(eventBus: EventBus) {
+	constructor(eventBus: EventBus, messageService: MessageService) {
 		this.eventBus = eventBus;
+		this.messageService = messageService;
 		this.subscribeToEvents(); // Подписываемся на события при инициализации
 	}
 
@@ -76,6 +79,17 @@ export class StateService {
 		);
 	}
 
+	public resetUnreadCount(userId: string): void {
+		if (this.state.unreadCounts.has(userId)) {
+			this.state.unreadCounts.delete(userId);
+			this.publishStateChange();
+			this.eventBus.publish(
+				'state:unreadCountsUpdated',
+				new Map(this.state.unreadCounts),
+			);
+		}
+	}
+
 	// --- Подписка на внешние события ---
 
 	private subscribeToEvents(): void {
@@ -102,7 +116,13 @@ export class StateService {
 
 		// Уведомления от сервера (от WebSocketService)
 		this.eventBus.subscribe('server:userExternalLogin', (payload) => {
-			this.updateUser(payload.user);
+			const loggedInUserLogin = payload.user.login;
+			console.log(
+				`StateService: User ${loggedInUserLogin} logged in. Checking messages to mark as delivered.`,
+			);
+			this.updateUser(payload.user); // Обновляем статус пользователя в списке
+			// Запускаем проверку и обновление статуса Delivered для сообщений ЭТОМУ пользователю
+			this.markMessagesAsDeliveredToUser(loggedInUserLogin);
 		});
 		this.eventBus.subscribe('server:userExternalLogout', (payload) => {
 			this.updateUser(payload.user);
@@ -117,6 +137,24 @@ export class StateService {
 			this.updateMessageStatus(payload.message.id, { isReaded: true });
 			// Если это наше сообщение прочитали, сбрасывать счетчик не нужно.
 			// Сброс счетчика происходит, когда МЫ читаем сообщения ('ui:selectChat' или 'ui:markMessagesRead')
+		});
+		this.eventBus.subscribe('message:deletedSuccessfully', (payload) => {
+			console.log(
+				'StateService: Handling successfully deleted message:',
+				payload.message.id,
+			);
+			// Используем существующий метод deleteMessage
+			this.deleteMessage(payload.message.id);
+		});
+		this.eventBus.subscribe('message:editedSuccessfully', (payload) => {
+			console.log(
+				'StateService: Handling successfully edited message:',
+				payload.message.id,
+			);
+			// Используем существующий метод editMessage
+			this.editMessage(payload.message.id, payload.message.text, {
+				isEdited: true,
+			});
 		});
 		this.eventBus.subscribe('server:messageDeleted', (payload) => {
 			this.deleteMessage(payload.message.id);
@@ -208,6 +246,120 @@ export class StateService {
 		}
 	}
 
+	// private handleNewMessage(message: MessageData): void {
+	// 	const currentUserLogin = this.state.currentUser?.login;
+	// 	if (!currentUserLogin) return;
+
+	// 	const isOutgoing = message.from === currentUserLogin;
+	// 	const chatPartnerLogin = isOutgoing ? message.to : message.from;
+
+	// 	// Добавляем сообщение в текущий чат, если он выбран И сообщение относится к нему
+	// 	if (this.state.selectedChatUserId === chatPartnerLogin) {
+	// 		if (
+	// 			this.state.currentChatMessages.some((m) => m.id === message.id)
+	// 		) {
+	// 			// Если сообщение уже есть (например, пришло уведомление server:messageReceived
+	// 			// почти одновременно с message:sentSuccessfully - маловероятно, но возможно),
+	// 			// можно просто обновить его статус, если он отличается.
+	// 			// Но пока оставим так.
+	// 			console.warn(
+	// 				`StateService: Message ${message.id} already exists in current chat.`,
+	// 			);
+	// 		} else {
+	// 			this.state.currentChatMessages.push(message);
+	// 			this.state.currentChatMessages.sort(
+	// 				(a, b) => a.datetime - b.datetime,
+	// 			);
+	// 			this.publishStateChange();
+	// 			this.eventBus.publish('state:currentMessagesUpdated', [
+	// 				...this.state.currentChatMessages,
+	// 			]);
+	// 		}
+	// 	} else if (!isOutgoing) {
+	// 		// Увеличиваем счетчик непрочитанных ТОЛЬКО для ВХОДЯЩИХ сообщений не из текущего чата
+	// 		this.incrementUnreadCount(chatPartnerLogin);
+	// 	}
+	// 	// Для исходящих сообщений в неактивном чате счетчик увеличивать не нужно.
+	// }
+	// private handleNewMessage(message: MessageData): void {
+	// 	const currentUserLogin = this.state.currentUser?.login;
+	// 	if (!currentUserLogin) return;
+
+	// 	const isOutgoing = message.from === currentUserLogin;
+	// 	const chatPartnerLogin = isOutgoing ? message.to : message.from;
+
+	// 	// Добавляем сообщение в текущий чат, если он выбран И сообщение относится к нему
+	// 	if (this.state.selectedChatUserId === chatPartnerLogin) {
+	// 		let messageExists = false;
+	// 		if (
+	// 			this.state.currentChatMessages.some((m) => m.id === message.id)
+	// 		) {
+	// 			messageExists = true;
+	// 			console.warn(
+	// 				`StateService: Message ${message.id} already exists in current chat.`,
+	// 			);
+	// 			// Можно обновить существующее сообщение, если нужно (например, статус)
+	// 			this.state.currentChatMessages =
+	// 				this.state.currentChatMessages.map(
+	// 					(m) => (m.id === message.id ? { ...m, ...message } : m), // Обновляем, если нашли
+	// 				);
+	// 		} else {
+	// 			// Сообщения нет, добавляем
+	// 			this.state.currentChatMessages.push(message);
+	// 			this.state.currentChatMessages.sort(
+	// 				(a, b) => a.datetime - b.datetime,
+	// 			);
+	// 		}
+
+	// 		// Публикуем обновление списка сообщений в любом случае (если добавили или обновили существующее)
+	// 		if (!messageExists) {
+	// 			// Публикуем, только если добавили новое
+	// 			this.publishStateChange();
+	// 			this.eventBus.publish('state:currentMessagesUpdated', [
+	// 				...this.state.currentChatMessages,
+	// 			]);
+	// 		}
+
+	// 		// ---> ЛОГИКА НЕМЕДЛЕННОГО ПРОЧТЕНИЯ <---
+	// 		// Если сообщение ВХОДЯЩЕЕ и чат АКТИВЕН
+	// 		if (!isOutgoing) {
+	// 			// Проверяем, нужно ли его помечать как прочитанное
+	// 			// (readActionTriggered управляется в ChatArea, здесь не проверяем,
+	// 			// предполагаем, что если чат открыт, новые сообщения читаются)
+	// 			console.log(
+	// 				`StateService: Incoming message ${message.id} received in active chat. Marking as read.`,
+	// 			);
+	// 			// Вызываем метод MessageService для отправки запроса MSG_READ
+	// 			// Используем void, т.к. не ждем ответа здесь, обновление статуса придет через server:messageRead
+	// 			void this.messageService
+	// 				.markMessageAsRead(message.id)
+	// 				.catch((error) =>
+	// 					console.error(
+	// 						`StateService: Failed to send MSG_READ for ${message.id}`,
+	// 						error,
+	// 					),
+	// 				);
+
+	// 			// Немедленно сбрасываем счетчик непрочитанных для этого чата в UI
+	// 			// (даже до ответа сервера на MSG_READ)
+	// 			this.resetUnreadCount(chatPartnerLogin);
+
+	// 			// Опционально: Оптимистично обновить статус isReaded в локальном стейте?
+	// 			// message.status.isReaded = true; // Это изменит объект до публикации
+	// 			// Если делать оптимистично, то нужно обновить и в массиве:
+	// 			// const msgIndex = this.state.currentChatMessages.findIndex(m => m.id === message.id);
+	// 			// if (msgIndex !== -1) {
+	// 			//    this.state.currentChatMessages[msgIndex].status.isReaded = true;
+	// 			// }
+	// 			// И опубликовать еще раз state:currentMessagesUpdated после оптимистичного обновления.
+	// 			// Пока оставим без оптимистичного обновления статуса.
+	// 		}
+	// 		// ---> КОНЕЦ ЛОГИКИ НЕМЕДЛЕННОГО ПРОЧТЕНИЯ <---
+	// 	} else if (!isOutgoing) {
+	// 		// Если сообщение входящее и чат НЕ выбран, увеличиваем счетчик непрочитанных
+	// 		this.incrementUnreadCount(chatPartnerLogin);
+	// 	}
+	// }
 	private handleNewMessage(message: MessageData): void {
 		const currentUserLogin = this.state.currentUser?.login;
 		if (!currentUserLogin) return;
@@ -217,31 +369,64 @@ export class StateService {
 
 		// Добавляем сообщение в текущий чат, если он выбран И сообщение относится к нему
 		if (this.state.selectedChatUserId === chatPartnerLogin) {
-			if (
-				this.state.currentChatMessages.some((m) => m.id === message.id)
-			) {
-				// Если сообщение уже есть (например, пришло уведомление server:messageReceived
-				// почти одновременно с message:sentSuccessfully - маловероятно, но возможно),
-				// можно просто обновить его статус, если он отличается.
-				// Но пока оставим так.
-				console.warn(
-					`StateService: Message ${message.id} already exists in current chat.`,
-				);
-			} else {
+			// Используем findIndex для возможного обновления существующего
+			const existingIndex = this.state.currentChatMessages.findIndex(
+				(m) => m.id === message.id,
+			);
+
+			if (existingIndex === -1) {
+				// Сообщения нет, добавляем
 				this.state.currentChatMessages.push(message);
 				this.state.currentChatMessages.sort(
 					(a, b) => a.datetime - b.datetime,
 				);
-				this.publishStateChange();
-				this.eventBus.publish('state:currentMessagesUpdated', [
-					...this.state.currentChatMessages,
-				]);
+			} else {
+				console.warn(
+					`StateService: Message ${message.id} already exists. Updating.`,
+				);
+				// Обновляем существующее сообщение
+				this.state.currentChatMessages[existingIndex] = {
+					...this.state.currentChatMessages[existingIndex],
+					...message, // Перезаписываем поля из нового сообщения (например, статус)
+				};
+			}
+
+			// Публикуем обновление списка сообщений
+			// Делаем это всегда, если сообщение для текущего чата (т.к. статус мог обновиться)
+			this.publishStateChange();
+			this.eventBus.publish('state:currentMessagesUpdated', [
+				...this.state.currentChatMessages,
+			]);
+
+			// Если сообщение ВХОДЯЩЕЕ и чат АКТИВЕН
+			if (!isOutgoing) {
+				console.log(
+					`StateService: Incoming message ${message.id} received in active chat. Marking as read.`,
+				);
+				// Отправляем запрос MSG_READ
+				void this.messageService
+					.markMessageAsRead(message.id)
+					.catch((error) =>
+						console.error(
+							`StateService: Failed to send MSG_READ for ${message.id}`,
+							error,
+						),
+					);
+
+				// Немедленно сбрасываем счетчик непрочитанных
+				this.resetUnreadCount(chatPartnerLogin);
+
+				// ---> ВАЖНО: Публикуем событие, что чат стал "прочитанным" <---
+				// ChatAreaComponent подпишется на это и установит readActionTriggered = true
+				this.eventBus.publish('chat:markedAsRead', {
+					userId: chatPartnerLogin,
+				});
+				// ---------------------------------------------------------------
 			}
 		} else if (!isOutgoing) {
-			// Увеличиваем счетчик непрочитанных ТОЛЬКО для ВХОДЯЩИХ сообщений не из текущего чата
+			// Если сообщение входящее и чат НЕ выбран, увеличиваем счетчик непрочитанных
 			this.incrementUnreadCount(chatPartnerLogin);
 		}
-		// Для исходящих сообщений в неактивном чате счетчик увеличивать не нужно.
 	}
 
 	// Обновляет статус существующего сообщения в текущем чате
@@ -319,17 +504,6 @@ export class StateService {
 		); // Отправляем копию Map
 	}
 
-	private resetUnreadCount(userId: string): void {
-		if (this.state.unreadCounts.has(userId)) {
-			this.state.unreadCounts.delete(userId);
-			this.publishStateChange();
-			this.eventBus.publish(
-				'state:unreadCountsUpdated',
-				new Map(this.state.unreadCounts),
-			);
-		}
-	}
-
 	// Сброс состояния при выходе пользователя
 	private resetStateOnLogout(): void {
 		const initial = getInitialAppState();
@@ -349,5 +523,45 @@ export class StateService {
 	// Вспомогательный метод для публикации общего события изменения состояния (для дебага)
 	private publishStateChange(): void {
 		this.eventBus.publish('state:changed', this.getStateSnapshot());
+	}
+
+	private markMessagesAsDeliveredToUser(recipientLogin: string): void {
+		const currentUserLogin = this.state.currentUser?.login;
+		if (
+			currentUserLogin &&
+			this.state.selectedChatUserId === recipientLogin
+		) {
+			let changed = false;
+			this.state.currentChatMessages = this.state.currentChatMessages.map(
+				(message) => {
+					if (
+						message.from === currentUserLogin &&
+						message.to === recipientLogin &&
+						!message.status.isDelivered
+					) {
+						changed = true;
+						return {
+							...message,
+							status: { ...message.status, isDelivered: true },
+						};
+					}
+					return message;
+				},
+			);
+
+			if (changed) {
+				console.log(
+					`StateService: Marked some messages to ${recipientLogin} as delivered in current chat.`,
+				);
+				this.publishStateChange();
+				this.eventBus.publish('state:currentMessagesUpdated', [
+					...this.state.currentChatMessages,
+				]);
+			}
+		} else {
+			console.log(
+				`StateService: User ${recipientLogin} logged in, but chat is not active. Statuses will update on fetch.`,
+			);
+		}
 	}
 }

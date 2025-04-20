@@ -1,5 +1,4 @@
 // src/components/header/header-component.ts
-import type { AuthService } from '../../services/auth-service';
 import type { EventBus } from '../../services/event-bus';
 import type { StateService } from '../../services/state-service';
 import ElementCreator from '../../utils/element-creator';
@@ -10,7 +9,6 @@ import { LogoutButtonComponent } from '../buttons/logout-button/logout-button-co
 import classes from './_header-component.module.scss';
 
 export class HeaderComponent extends BaseComponent {
-	private readonly authService: AuthService;
 	private readonly eventBus: EventBus;
 	private readonly stateService: StateService;
 
@@ -24,17 +22,12 @@ export class HeaderComponent extends BaseComponent {
 
 	private unsubscribeCurrentUser: (() => void) | null = null;
 
-	constructor(
-		authService: AuthService,
-		eventBus: EventBus,
-		stateService: StateService,
-	) {
+	constructor(eventBus: EventBus, stateService: StateService) {
 		super({
 			tag: 'header',
 			classes: classes['header'],
 		});
 
-		this.authService = authService;
 		this.eventBus = eventBus;
 		this.stateService = stateService;
 
@@ -67,7 +60,7 @@ export class HeaderComponent extends BaseComponent {
 		this.appNameElement = ElementCreator.create({
 			tag: 'div',
 			classes: classes['app-name'],
-			content: 'Fun Chat',
+			content: 'Fun chat',
 		}) as HTMLElement;
 
 		this.buttonsContainer = ElementCreator.create({

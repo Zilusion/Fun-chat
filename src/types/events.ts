@@ -51,12 +51,16 @@ export type EventPayloadMap = {
 	'state:changed': Readonly<AppState>;
 
 	'message:sentSuccessfully': MessageData;
+	'message:deletedSuccessfully': MessageDeleteResponsePayload;
+	'message:editedSuccessfully': MessageEditResponsePayload;
 
 	// --- UI events ---
 	'ui:loginRequest': { login: string; password: string };
 	'ui:logoutRequest': void;
 	'ui:selectChat': { userId: string };
 	'ui:clearChatSelection': void;
+
+	'chat:markedAsRead': { userId: string };
 };
 
 export type AppEventType = keyof EventPayloadMap;

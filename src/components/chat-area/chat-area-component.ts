@@ -5,21 +5,24 @@ import type { MessageService } from '../../services/message-service';
 import type { UserInfo, MessageData } from '../../types/api-types';
 import ElementCreator from '../../utils/element-creator';
 import { BaseComponent } from '../base/component';
-// import { ChatMessageComponent } from './chat-message-component'; // Позже можно вынести
+import { ChatMessageComponent } from './chat-message-component';
 
 import classes from './_chat-area-component.module.scss';
 
-export class ChatAreaComponent extends BaseComponent {
+export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 	private readonly eventBus: EventBus;
 	private readonly stateService: StateService;
 	private readonly messageService: MessageService;
 
-	// Состояние компонента
 	private currentChatPartner: UserInfo | null = null;
-	private messages: MessageData[] = []; // Локальная копия для рендера
+	private messages: MessageData[] = [];
 	private isLoading = false;
+	private firstUnreadMessageId: string | null = null;
+	private unreadDividerElement: HTMLElement | null = null;
+	private shouldShowUnreadDivider = false;
+	private readActionTriggered = false;
+	private ignoreNextScrollEvent = false;
 
-	// Элементы UI (используем !, т.к. render их создаст до первого использования)
 	private chatHeader!: HTMLElement;
 	private partnerNameElement!: HTMLElement;
 	private partnerStatusElement!: HTMLElement;
@@ -29,6 +32,8 @@ export class ChatAreaComponent extends BaseComponent {
 	private sendButton!: HTMLButtonElement;
 	private placeholderElement!: HTMLElement;
 
+	private messageComponents: Map<string, ChatMessageComponent> = new Map();
+
 	private unsubscribeFunctions: (() => void)[] = [];
 
 	constructor(
@@ -36,24 +41,29 @@ export class ChatAreaComponent extends BaseComponent {
 		stateService: StateService,
 		messageService: MessageService,
 	) {
-		// 1. Создаем корневой <section>
 		super({
 			tag: 'section',
 			classes: classes['chat-area'],
 		});
 
-		// 2. Присваиваем зависимости
 		this.eventBus = eventBus;
 		this.stateService = stateService;
 		this.messageService = messageService;
 
-		// 3. Вызываем render ВРУЧНУЮ в конце конструктора
 		this.render();
 	}
 
 	public destroy(): void {
 		this.unsubscribeFunctions.forEach((unsubscribe) => unsubscribe());
 		this.unsubscribeFunctions = [];
+		this.messageListElement?.removeEventListener(
+			'scroll',
+			this.handleScroll.bind(this),
+		);
+		this.messageListElement?.removeEventListener(
+			'click',
+			this.handleMessagesClick.bind(this),
+		);
 		this.sendButton?.removeEventListener(
 			'click',
 			this.handleSendClick.bind(this),
@@ -66,13 +76,13 @@ export class ChatAreaComponent extends BaseComponent {
 			'input',
 			this.autoResizeInput.bind(this),
 		);
+		this.messageComponents.forEach((comp) => comp.destroy());
+		this.messageComponents.clear();
 		super.destroy();
 	}
 
-	// Render создает всю структуру, добавляет слушатели и подписки
 	protected render(): void {
 		console.log('ChatAreaComponent rendering...');
-		// --- Создание DOM структуры ---
 		this.chatHeader = ElementCreator.create({
 			tag: 'header',
 			classes: classes['chat-header'],
@@ -116,7 +126,6 @@ export class ChatAreaComponent extends BaseComponent {
 		}) as HTMLButtonElement;
 		this.chatFooter.append(this.messageInput, this.sendButton);
 
-		// Добавляем созданные части в корневой элемент this.element
 		this.appendChildren([
 			this.chatHeader,
 			this.messageListElement,
@@ -124,7 +133,21 @@ export class ChatAreaComponent extends BaseComponent {
 			this.chatFooter,
 		]);
 
-		// --- Добавление слушателей ---
+		this.addEventListeners();
+		this.subscribeToEvents();
+
+		const initialSelectedUserId = this.stateService.getSelectedChatUserId();
+		this.updateChatView(null);
+		if (initialSelectedUserId) {
+			const user = this.stateService.getUser(initialSelectedUserId);
+			if (user) {
+				this.updateChatView(user);
+				this.loadMessages(initialSelectedUserId);
+			}
+		}
+	}
+
+	private addEventListeners(): void {
 		this.sendButton.addEventListener(
 			'click',
 			this.handleSendClick.bind(this),
@@ -137,20 +160,19 @@ export class ChatAreaComponent extends BaseComponent {
 			'input',
 			this.autoResizeInput.bind(this),
 		);
-
-		// --- Подписка на события ---
-		this.subscribeToEvents();
-
-		// --- Установка начального вида ---
-		const initialSelectedUserId = this.stateService.getSelectedChatUserId();
-		if (initialSelectedUserId) {
-			this.handleChatSelection(initialSelectedUserId);
-		} else {
-			this.updateChatView(null);
-		}
+		this.messageListElement.addEventListener(
+			'scroll',
+			this.handleScroll.bind(this),
+			{ passive: true },
+		);
+		this.messageListElement.addEventListener(
+			'click',
+			this.handleMessagesClick.bind(this),
+		);
 	}
 
 	private subscribeToEvents(): void {
+		this.unsubscribeFunctions = [];
 		const unsubscribeSelect = this.eventBus.subscribe(
 			'state:selectedChatChanged',
 			(userId) => {
@@ -159,12 +181,45 @@ export class ChatAreaComponent extends BaseComponent {
 		);
 		this.unsubscribeFunctions.push(unsubscribeSelect);
 
+		const unsubscribeChatRead = this.eventBus.subscribe(
+			'chat:markedAsRead',
+			({ userId }) => {
+				// Если событие пришло для ТЕКУЩЕГО чата
+				if (this.currentChatPartner?.login === userId) {
+					console.log(
+						`ChatArea: Received chat:markedAsRead for ${userId}. Setting readActionTriggered.`,
+					);
+					this.readActionTriggered = true; // Ставим флаг, что действие прочтения было
+					// Сразу убираем разделитель, если он вдруг еще есть
+					if (this.unreadDividerElement) {
+						this.unreadDividerElement.remove();
+						this.unreadDividerElement = null;
+					}
+					this.shouldShowUnreadDivider = false; // Запрещаем показ до смены чата
+					this.firstUnreadMessageId = null;
+				}
+			},
+		);
+		this.unsubscribeFunctions.push(unsubscribeChatRead);
+
 		const unsubscribeMessages = this.eventBus.subscribe(
 			'state:currentMessagesUpdated',
-			(messages) => {
+			(newMessages: MessageData[]) => {
 				if (this.currentChatPartner) {
-					this.messages = messages;
-					this.renderMessages();
+					console.log(
+						"ChatArea: Received 'state:currentMessagesUpdated'",
+					);
+					const wasScrolledToBottom = this.isScrolledToBottom();
+					const isNewIncomingAdded =
+						newMessages.length > this.messages.length &&
+						newMessages.at(-1)?.from ===
+							this.currentChatPartner.login;
+
+					this.messages = newMessages;
+					this.renderMessages(
+						wasScrolledToBottom,
+						isNewIncomingAdded,
+					);
 				}
 			},
 		);
@@ -189,11 +244,51 @@ export class ChatAreaComponent extends BaseComponent {
 			},
 		);
 		this.unsubscribeFunctions.push(unsubscribeUsers);
+
+		const unsubscribeDelivered = this.eventBus.subscribe(
+			'server:messageDelivered',
+			(payload) => {
+				const component = this.messageComponents.get(
+					payload.message.id,
+				);
+				const messageData = this.findMessageById(payload.message.id);
+				if (component && messageData) {
+					messageData.status.isDelivered = true;
+					component.updateMessage(messageData);
+				}
+			},
+		);
+		this.unsubscribeFunctions.push(unsubscribeDelivered);
+
+		const unsubscribeRead = this.eventBus.subscribe(
+			'server:messageRead',
+			(payload) => {
+				const component = this.messageComponents.get(
+					payload.message.id,
+				);
+				const messageData = this.findMessageById(payload.message.id);
+				if (component && messageData) {
+					messageData.status.isReaded = true;
+					component.updateMessage(messageData);
+				}
+			},
+		);
+		this.unsubscribeFunctions.push(unsubscribeRead);
 	}
 
-	// Обработчик выбора чата
+	private findMessageById(id: string): MessageData | undefined {
+		return this.messages.find((m) => m.id === id);
+	}
+
 	private handleChatSelection(userId: string | null): void {
 		console.log(`ChatArea: Handling chat selection for ${userId}`);
+		this.firstUnreadMessageId = null;
+		this.unreadDividerElement?.remove();
+		this.unreadDividerElement = null;
+		this.shouldShowUnreadDivider = true;
+		this.readActionTriggered = false;
+		this.ignoreNextScrollEvent = false;
+
 		if (userId) {
 			const user = this.stateService.getUser(userId);
 			if (user) {
@@ -210,50 +305,74 @@ export class ChatAreaComponent extends BaseComponent {
 		}
 	}
 
-	// Загрузка сообщений
 	private loadMessages(userId: string): void {
-		if (this.isLoading) return;
+		if (this.isLoading) {
+			console.log('ChatArea: Message loading already in progress.');
+			return;
+		}
 		this.isLoading = true;
 		this.showLoadingState(true);
-		this.messages = []; // Очищаем старые
+		this.messages = [];
 
-		console.log(`ChatArea: Loading messages for ${userId}`);
+		console.log(`ChatArea: Loading messages for ${userId}...`);
 		void (async (): Promise<void> => {
+			let fetchedMessages: MessageData[] | null = null;
+			let fetchError: Error | null = null;
+
 			try {
-				const messages =
+				fetchedMessages =
 					await this.messageService.fetchMessages(userId);
 				console.log(
-					`ChatArea: Fetched ${messages.length} messages for ${userId}`,
+					`ChatArea: Fetched ${fetchedMessages.length} messages for ${userId}`,
 				);
-				if (this.stateService.getSelectedChatUserId() === userId) {
-					this.stateService.setMessagesForCurrentChat(messages);
-				} else {
-					console.log(
-						'ChatArea: Chat changed during message load, ignoring fetched messages.',
-					);
-				}
 			} catch (error) {
 				console.error(
 					`ChatArea: Failed to load messages for ${userId}:`,
 					error,
 				);
-				if (this.stateService.getSelectedChatUserId() === userId) {
-					this.showPlaceholder('Failed to load messages.');
-					this.messages = [];
-				}
+				fetchError =
+					error instanceof Error ? error : new Error(String(error));
 			} finally {
-				if (
-					this.stateService.getSelectedChatUserId() === userId ||
-					!this.stateService.getSelectedChatUserId()
-				) {
-					this.isLoading = false;
+				this.isLoading = false;
+
+				if (this.stateService.getSelectedChatUserId() === userId) {
 					this.showLoadingState(false);
+
+					if (fetchedMessages === null) {
+						this.showPlaceholder(
+							`Failed to load messages: ${fetchError?.message ?? 'Unknown error'}`,
+						);
+						this.messages = [];
+						if (this.messageListElement)
+							this.messageListElement.innerHTML = '';
+						this.messageComponents.clear();
+					} else {
+						this.stateService.setMessagesForCurrentChat(
+							fetchedMessages,
+						);
+					}
+				} else {
+					console.log(
+						'ChatArea: Load finished, but chat changed. Discarding results.',
+					);
 				}
 			}
 		})();
 	}
 
-	// Обновляет вид чата в зависимости от выбранного партнера
+	private updateDisplayAfterLoading(): void {
+		if (this.messages.length === 0 && this.currentChatPartner) {
+			this.showPlaceholder(
+				`This is the beginning of your conversation with ${this.currentChatPartner.login}`,
+			);
+		} else if (this.messages.length > 0) {
+			this.hidePlaceholder();
+		} else if (!this.currentChatPartner) {
+			this.showPlaceholder('Select a chat to start messaging');
+		}
+	}
+
+	// Обновляет вид чата
 	private updateChatView(partner: UserInfo | null): void {
 		this.currentChatPartner = partner;
 		const isChatSelected = Boolean(partner);
@@ -271,39 +390,27 @@ export class ChatAreaComponent extends BaseComponent {
 
 		if (isChatSelected) {
 			this.updateChatHeader(partner!);
-			this.messages = [...this.stateService.getCurrentChatMessages()];
+			this.messages = [];
 			this.renderMessages();
 		} else {
 			this.messages = [];
 			this.messageListElement.innerHTML = '';
+			this.messageComponents.forEach((comp) => comp.destroy());
+			this.messageComponents.clear();
 			this.showPlaceholder('Select a chat to start messaging');
 			if (this.messageInput) this.messageInput.value = '';
 		}
 		this.autoResizeInput();
 	}
 
-	// Обновляет хедер чата
 	private updateChatHeader(partner: UserInfo): void {
-		if (this.partnerNameElement) {
-			this.partnerNameElement.textContent = partner.login;
-		}
-		if (this.partnerStatusElement) {
+		this.partnerNameElement.textContent = partner.login;
+		const onlineClass = classes['partner-status--online'];
+		const offlineClass = classes['partner-status--offline'];
+		if (this.partnerStatusElement && onlineClass && offlineClass) {
 			this.partnerStatusElement.textContent = partner.isLogined
 				? 'Online'
 				: 'Offline';
-
-			const onlineClass = classes['partner-status--online'];
-			const offlineClass = classes['partner-status--offline'];
-
-			// Проверяем классы на всякий случай
-			if (!onlineClass || !offlineClass) {
-				console.error(
-					'ChatAreaComponent: Status CSS classes not found in module!',
-				);
-				return; // Выходим, если классов нет
-			}
-
-			// Устанавливаем нужный класс и удаляем противоположный
 			if (partner.isLogined) {
 				this.partnerStatusElement.classList.add(onlineClass);
 				this.partnerStatusElement.classList.remove(offlineClass);
@@ -314,7 +421,6 @@ export class ChatAreaComponent extends BaseComponent {
 		}
 	}
 
-	// Показывает/скрывает плейсхолдер
 	private showPlaceholder(text: string): void {
 		this.placeholderElement.textContent = text;
 		this.placeholderElement.classList.remove(classes['hidden'] ?? 'hidden');
@@ -326,129 +432,365 @@ export class ChatAreaComponent extends BaseComponent {
 		this.messageListElement.classList.remove(classes['hidden'] ?? 'hidden');
 	}
 
-	// Рендерит сообщения
-	private renderMessages(): void {
-		if (this.messages.length === 0 && this.currentChatPartner) {
+	private renderMessages(
+		wasScrolledToBottom = false,
+		isNewIncomingAdded = false,
+	): void {
+		if (!this.messageListElement) return;
+		console.log(
+			`ChatArea: Rendering ${this.messages.length} messages. WasScrolledToBottom: ${wasScrolledToBottom}, NewIncoming: ${isNewIncomingAdded}`,
+		);
+
+		const currentScrollTop = this.messageListElement.scrollTop;
+
+		const newMessageIds = new Set(this.messages.map((m) => m.id));
+		this.messageComponents.forEach((component, messageId) => {
+			if (!newMessageIds.has(messageId)) {
+				component.destroy();
+				component.getElement().remove();
+				this.messageComponents.delete(messageId);
+			}
+		});
+
+		this.determineFirstUnread();
+
+		let dividerNeedsInsert = false;
+		if (this.firstUnreadMessageId && !this.unreadDividerElement) {
+			this.unreadDividerElement = this.createUnreadDividerElement();
+			dividerNeedsInsert = true;
+			console.log('ChatArea: Unread divider element created.');
+		} else if (!this.firstUnreadMessageId && this.unreadDividerElement) {
+			this.unreadDividerElement.remove();
+			this.unreadDividerElement = null;
+			console.log('ChatArea: Unread divider element removed.');
+		}
+
+		const elementsToAppend: HTMLElement[] = [];
+		let dividerInserted = false;
+		if (this.unreadDividerElement && !dividerNeedsInsert) {
+			elementsToAppend.push(this.unreadDividerElement);
+			dividerInserted = true;
+		}
+
+		this.messages.forEach((message) => {
+			if (
+				this.unreadDividerElement &&
+				message.id === this.firstUnreadMessageId &&
+				!dividerInserted
+			) {
+				elementsToAppend.push(this.unreadDividerElement);
+				dividerInserted = true;
+			}
+			const existingComponent = this.messageComponents.get(message.id);
+			if (existingComponent) {
+				existingComponent.updateMessage(message);
+				elementsToAppend.push(existingComponent.getElement());
+			} else {
+				const messageComponent = new ChatMessageComponent({
+					message,
+					stateService: this.stateService,
+					onDelete: this.handleDeleteMessage,
+					onEdit: this.handleEditMessage,
+				});
+				this.messageComponents.set(message.id, messageComponent);
+				elementsToAppend.push(messageComponent.getElement());
+			}
+		});
+		this.messageListElement.replaceChildren(...elementsToAppend);
+
+		if (this.firstUnreadMessageId && dividerInserted) {
+			this.unreadDividerElement = this.messageListElement.querySelector(
+				`.${classes['new-messages-divider']}`,
+			);
+		}
+
+		if (this.messages.length > 0) {
+			this.hidePlaceholder();
+		} else if (this.currentChatPartner && !this.isLoading) {
 			this.showPlaceholder(
 				`This is the beginning of your conversation with ${this.currentChatPartner.login}`,
 			);
-		} else if (this.messages.length > 0) {
-			this.hidePlaceholder();
-			// Сохраняем текущую позицию скролла, если нужно будет восстановить
-			const shouldScrollToBottom = this.isScrolledToBottom();
-
-			this.messageListElement.innerHTML = ''; // Очищаем
-			const fragment = document.createDocumentFragment();
-			this.messages.forEach((message) => {
-				const messageElement = this.createMessageElement(message);
-				fragment.append(messageElement);
-			});
-			this.messageListElement.append(fragment);
-
-			// Прокручиваем вниз только если пользователь был внизу до обновления
-			if (shouldScrollToBottom) {
-				this.scrollToBottom();
-			}
-			// TODO: Реализовать логику прокрутки к разделителю непрочитанных
-		} else if (this.currentChatPartner) {
-			// Если партнер выбран, но сообщений нет после фильтрации (маловероятно)
-			this.showPlaceholder(
-				`No messages with ${this.currentChatPartner.login} yet.`,
-			);
-		} else {
+		} else if (!this.currentChatPartner) {
 			this.showPlaceholder('Select a chat to start messaging');
 		}
-	}
 
-	// Создает элемент сообщения
-	private createMessageElement(message: MessageData): HTMLElement {
-		const currentUserLogin = this.stateService.getCurrentUser()?.login;
-		const isOutgoing = message.from === currentUserLogin;
+		if (this.messages.length > 0) {
+			const dividerJustAppeared =
+				this.firstUnreadMessageId &&
+				this.unreadDividerElement &&
+				dividerInserted;
 
-		const messageClasses = [
-			classes['message-item'],
-			isOutgoing
-				? classes['message-item--outgoing']
-				: classes['message-item--incoming'],
-		];
+			if (dividerJustAppeared) {
+				console.log(
+					'ChatArea: Divider appeared, setting ignoreNextScrollEvent flag before scrolling.',
+				);
+				this.ignoreNextScrollEvent = true;
+				this.scrollOnOpen();
+			} else if (isNewIncomingAdded) {
+				console.log(
+					'ChatArea: Scrolling down for new incoming message.',
+				);
+				if (this.ignoreNextScrollEvent) {
+					console.log(
+						'ChatArea: Ignoring programmatic scroll after divider appearance.',
+					);
+				} else {
+					this.scrollToBottom('smooth');
+				}
+			} else if (wasScrolledToBottom) {
+				console.log('ChatArea: Staying at bottom (auto scroll).');
+				if (this.ignoreNextScrollEvent) {
+					console.log(
+						'ChatArea: Ignoring programmatic scroll after divider appearance.',
+					);
+				} else {
+					this.scrollToBottom('auto');
+				}
+			} else {
+				console.log(
+					`ChatArea: Restoring scroll to ${currentScrollTop}`,
+				);
+				this.messageListElement.scrollTop = currentScrollTop;
+				this.ignoreNextScrollEvent = false;
+			}
 
-		const messageDate = new Date(message.datetime);
-		const formattedTime = messageDate.toLocaleTimeString([], {
-			hour: '2-digit',
-			minute: '2-digit',
-		});
-		// const formattedDate = messageDate.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-		const senderElement = ElementCreator.create({
-			tag: 'div',
-			classes: classes['message-sender'],
-			content: isOutgoing ? 'You' : message.from,
-		});
-		const timeElement = ElementCreator.create({
-			tag: 'div',
-			classes: classes['message-time'],
-			content: formattedTime,
-		});
-		const headerElement = ElementCreator.create({
-			tag: 'div',
-			classes: classes['message-header'],
-			children: [senderElement, timeElement],
-		});
-
-		const textElement = ElementCreator.create({
-			tag: 'div',
-			classes: classes['message-text'],
-			content: message.text,
-		});
-
-		let statusElement: HTMLElement | null = null;
-		if (isOutgoing) {
-			let statusText = 'Sent';
-			if (message.status.isReaded) statusText = 'Read';
-			else if (message.status.isDelivered) statusText = 'Delivered';
-			if (message.status.isEdited) statusText += ' (edited)';
-
-			statusElement = ElementCreator.create({
-				tag: 'div',
-				classes: classes['message-status'],
-				content: statusText,
-			}) as HTMLElement;
+			if (this.ignoreNextScrollEvent) {
+				setTimeout(() => {
+					this.ignoreNextScrollEvent = false;
+				}, 100);
+			}
 		}
-
-		const messageElement = ElementCreator.create({
-			tag: 'div',
-			classes: messageClasses,
-			children: [headerElement, textElement, statusElement].filter(
-				Boolean,
-			) as HTMLElement[],
-		}) as HTMLElement;
-
-		// TODO: Добавить кнопки Edit/Delete для исходящих
-
-		return messageElement;
 	}
 
-	// --- Обработчики ввода и отправки ---
+	private determineFirstUnread(): void {
+		// Добавлена проверка !this.readActionTriggered
+		if (this.shouldShowUnreadDivider && !this.readActionTriggered) {
+			const currentUserLogin = this.stateService.getCurrentUser()?.login;
+			this.firstUnreadMessageId =
+				this.messages.find(
+					(message) =>
+						message.from !== currentUserLogin &&
+						!message.status.isReaded,
+				)?.id ?? null;
+			console.log(
+				'ChatArea: Determined first unread message ID:',
+				this.firstUnreadMessageId,
+			);
+		} else {
+			// Если показывать не нужно ИЛИ действие прочтения уже было, сбрасываем ID
+			this.firstUnreadMessageId = null;
+			// Если разделитель еще есть в DOM, но показывать не нужно, удаляем
+			if (this.unreadDividerElement) {
+				this.unreadDividerElement.remove();
+				this.unreadDividerElement = null;
+				console.log(
+					'ChatArea: Removed unread divider because it should not be shown.',
+				);
+			}
+		}
+	}
+
+	private createUnreadDividerElement(): HTMLElement {
+		return ElementCreator.create({
+			tag: 'div',
+			classes: classes['new-messages-divider'],
+			content: 'New messages',
+		}) as HTMLElement;
+	}
+
+	private removeUnreadDivider(): void {
+		// Вызываем пометку прочитанными ТОЛЬКО если разделитель БЫЛ ВИДИМЫМ
+		// и действие прочтения ЕЩЕ НЕ БЫЛО ВЫПОЛНЕНО
+		if (
+			this.unreadDividerElement &&
+			this.shouldShowUnreadDivider &&
+			!this.readActionTriggered
+		) {
+			console.log(
+				'ChatArea: Removing unread divider due to interaction AND marking as read.',
+			);
+			this.unreadDividerElement.remove();
+			this.unreadDividerElement = null;
+			this.shouldShowUnreadDivider = false; // Запрещаем показ до смены чата
+			this.markVisibleMessagesAsRead(); // Инициируем пометку как прочитанных
+			// firstUnreadMessageId сбросится в markVisibleMessagesAsRead или следующем determineFirstUnread
+		} else if (this.unreadDividerElement) {
+			// Если разделитель просто есть, но shouldShowUnreadDivider уже false, просто убираем
+			this.unreadDividerElement.remove();
+			this.unreadDividerElement = null;
+			this.firstUnreadMessageId = null;
+		}
+	}
+
+	private scrollOnOpen(): void {
+		requestAnimationFrame(() => {
+			if (!this.messageListElement) return;
+			if (this.unreadDividerElement) {
+				const dividerTop = this.unreadDividerElement.offsetTop;
+				const listHeight = this.messageListElement.clientHeight;
+				const scrollTo = Math.max(0, dividerTop - listHeight / 5);
+				this.messageListElement.scrollTo({
+					top: scrollTo,
+					behavior: 'auto',
+				});
+				console.log(`Scrolling to unread divider at ${scrollTo}px`);
+			}
+		});
+	}
+
+	private handleDeleteMessage = (messageId: string): void => {
+		console.log(`ChatArea: Requesting delete for message ${messageId}`);
+		const messageComponent = this.messageComponents.get(messageId);
+		messageComponent?.addClass(
+			classes['message-item--pending'] ?? 'message-item--pending',
+		);
+
+		void (async (): Promise<void> => {
+			try {
+				await this.messageService.deleteMessage(messageId);
+				console.log(`ChatArea: Delete request sent for ${messageId}`);
+			} catch (error) {
+				console.error(
+					`ChatArea: Failed to delete message ${messageId}:`,
+					error,
+				);
+				messageComponent?.removeClass(
+					classes['message-item--pending'] ?? 'message-item--pending',
+				);
+			}
+		})();
+	};
+
+	private handleEditMessage = (
+		messageId: string,
+		currentText: string,
+	): void => {
+		console.log(`ChatArea: Requesting edit for message ${messageId}`);
+		const newText = prompt('Enter new message text:', currentText);
+
+		if (
+			newText !== null &&
+			newText.trim() &&
+			newText.trim() !== currentText.trim()
+		) {
+			const textToSend = newText.trim();
+			console.log(
+				`ChatArea: Sending edit request for ${messageId} with text: ${textToSend}`,
+			);
+
+			const messageComponent = this.messageComponents.get(messageId);
+			messageComponent?.addClass(
+				classes['message-item--pending'] ?? 'message-item--pending',
+			);
+
+			void (async (): Promise<void> => {
+				try {
+					await this.messageService.editMessage(
+						messageId,
+						textToSend,
+					);
+					console.log(`ChatArea: Edit request sent for ${messageId}`);
+				} catch (error) {
+					console.error(
+						`ChatArea: Failed to edit message ${messageId}:`,
+						error,
+					);
+					alert(
+						`Error editing message: ${error instanceof Error ? error.message : 'Unknown error'}`,
+					);
+				} finally {
+					messageComponent?.removeClass(
+						classes['message-item--pending'] ??
+							'message-item--pending',
+					);
+				}
+			})();
+		} else if (newText === null) {
+			console.log('ChatArea: Edit cancelled by user.');
+		} else {
+			console.log('ChatArea: Edit cancelled or text not changed.');
+		}
+	};
+
+	private handleScroll(): void {
+		if (this.ignoreNextScrollEvent) {
+			console.log(
+				'ChatArea: Ignoring first scroll event after programmatic scroll.',
+			);
+			this.ignoreNextScrollEvent = false;
+			return;
+		}
+		this.removeUnreadDivider();
+	}
+	private handleMessagesClick(): void {
+		this.removeUnreadDivider();
+	}
 	private handleSendClick(): void {
+		this.removeUnreadDivider();
 		this.sendMessage();
 	}
-	private handleInputKeyDown(event: KeyboardEvent): void {
+	private handleInputKeyDown = (event: KeyboardEvent): void => {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
+			this.removeUnreadDivider();
 			this.sendMessage();
+		}
+	};
+
+	private markVisibleMessagesAsRead(): void {
+		// Выполняем только если действие еще не было триггернуто
+		if (this.readActionTriggered || !this.currentChatPartner) return;
+		console.log('ChatArea: Triggering mark as read action...');
+		this.readActionTriggered = true; // Ставим флаг СРАЗУ
+
+		const currentUserLogin = this.stateService.getCurrentUser()?.login;
+		if (!currentUserLogin) return;
+
+		// Ищем ID непрочитанных ВХОДЯЩИХ
+		const unreadIncomingMessageIds = this.messages
+			.filter(
+				(message) =>
+					message.from === this.currentChatPartner?.login &&
+					!message.status.isReaded,
+			)
+			.map((message) => message.id);
+
+		if (unreadIncomingMessageIds.length > 0) {
+			console.log(
+				`ChatArea: Marking ${unreadIncomingMessageIds.length} messages as read: [${unreadIncomingMessageIds.join(', ')}]`,
+			);
+			// Сбрасываем счетчик в StateService немедленно
+			this.stateService.resetUnreadCount(this.currentChatPartner.login);
+			// Отправляем запросы на сервер
+			unreadIncomingMessageIds.forEach((id) => {
+				void this.messageService
+					.markMessageAsRead(id)
+					.catch((error) =>
+						console.error(
+							`Failed to mark message ${id} as read:`,
+							error,
+						),
+					);
+			});
+		} else {
+			console.log(
+				'ChatArea: No unread incoming messages found to mark as read.',
+			);
+		}
+		// Сбрасываем ID первого непрочитанного после попытки отметки
+		this.firstUnreadMessageId = null;
+		// Если разделитель еще есть, удаляем его (на случай если markVisibleMessagesAsRead вызван не через removeUnreadDivider)
+		if (this.unreadDividerElement) {
+			this.unreadDividerElement.remove();
+			this.unreadDividerElement = null;
 		}
 	}
 
-	// --- Метод отправки сообщения ---
 	private sendMessage(): void {
 		const text = this.messageInput.value.trim();
 		const recipient = this.currentChatPartner;
-
-		// Проверяем, есть ли текст и выбран ли получатель
 		if (!text || !recipient) {
-			console.warn('Cannot send message: No text or recipient selected.');
 			if (!text && this.messageInput) {
-				// Можно добавить визуальную обратную связь, если поле пустое
 				this.messageInput.classList.add(
 					classes['message-input--error'] ?? '',
 				);
@@ -462,86 +804,62 @@ export class ChatAreaComponent extends BaseComponent {
 			}
 			return;
 		}
-
-		console.log(`Sending message to ${recipient.login}: ${text}`);
-		// Блокируем ввод и кнопку на время отправки
 		const originalButtonText = this.sendButton.textContent;
 		this.messageInput.disabled = true;
 		this.sendButton.disabled = true;
-		this.sendButton.textContent = 'Sending...'; // Индикация отправки
-		this.sendButton.classList.add('button--loading'); // Визуальный лоадер
+		this.sendButton.textContent = 'Sending...';
+		this.sendButton.classList.add('button--loading');
 
 		void (async (): Promise<void> => {
 			try {
-				// Вызываем сервис для отправки
-				const sentMessage = await this.messageService.sendMessage(
-					recipient.login,
-					text,
-				);
-				console.log('Message sent:', sentMessage);
-				// Успешно! Очищаем поле ввода.
+				await this.messageService.sendMessage(recipient.login, text);
 				this.messageInput.value = '';
-				this.autoResizeInput(); // Сбрасываем высоту textarea
-				// Оптимистичное добавление (не обязательно, т.к. придет уведомление)
-				// this.messages.push(sentMessage);
-				// this.renderMessages(); // Можно сразу отрендерить
-				this.scrollToBottom(); // Прокручиваем вниз после отправки
+				this.autoResizeInput();
+				this.scrollToBottom();
 			} catch (error) {
 				console.error('Failed to send message:', error);
-				// Показываем ошибку пользователю (можно через EventBus или локально)
 				alert(
 					`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`,
 				);
 			} finally {
-				// Разблокируем ввод и кнопку в любом случае
-				if (this.messageInput) this.messageInput.disabled = false; // Проверка на null
+				if (this.messageInput) this.messageInput.disabled = false;
 				if (this.sendButton) {
 					this.sendButton.disabled = false;
-					this.sendButton.textContent = originalButtonText; // Возвращаем текст кнопки
-					this.sendButton.classList.remove('button--loading'); // Убираем лоадер
+					this.sendButton.textContent = originalButtonText;
+					this.sendButton.classList.remove('button--loading');
 				}
-				if (this.messageInput) this.messageInput.focus(); // Возвращаем фокус
+				if (this.messageInput) this.messageInput.focus();
 			}
 		})();
 	}
 
-	// --- Вспомогательные методы ---
-
-	// Автоматическое изменение высоты textarea
 	private autoResizeInput(): void {
 		if (!this.messageInput) return;
-		// Сбрасываем высоту, чтобы textarea могла сжаться, если текст удален
 		this.messageInput.style.height = 'auto';
-		// Устанавливаем новую высоту, ограниченную максимальной
-		const maxHeight = 150; // Макс. высота в пикселях
-		const scrollHeight = this.messageInput.scrollHeight;
+		const maxHeight = 150;
+		const { scrollHeight } = this.messageInput;
 		const newHeight = Math.min(scrollHeight, maxHeight);
 		this.messageInput.style.height = `${newHeight}px`;
-		// Показываем скролл, только если достигнута макс. высота
 		this.messageInput.style.overflowY =
 			scrollHeight > maxHeight ? 'auto' : 'hidden';
 	}
 
-	// Прокрутка списка сообщений вниз
 	private scrollToBottom(behavior: ScrollBehavior = 'smooth'): void {
 		if (this.messageListElement) {
-			// Даем браузеру время отрисовать новые сообщения перед прокруткой
 			requestAnimationFrame(() => {
 				if (this.messageListElement) {
-					// Проверка нужна снова внутри RAF
 					this.messageListElement.scrollTo({
 						top: this.messageListElement.scrollHeight,
-						behavior: behavior, // 'smooth' или 'auto'
+						behavior,
 					});
 				}
 			});
 		}
 	}
 
-	// Проверяет, находится ли пользователь внизу списка сообщений
 	private isScrolledToBottom(): boolean {
-		if (!this.messageListElement) return true; // Если элемента нет, считаем, что внизу
-		const threshold = 10; // Погрешность в пикселях
+		if (!this.messageListElement) return true;
+		const threshold = 10;
 		return (
 			this.messageListElement.scrollHeight -
 				this.messageListElement.scrollTop -
@@ -551,39 +869,24 @@ export class ChatAreaComponent extends BaseComponent {
 	}
 
 	private showLoadingState(isLoading: boolean): void {
-		// console.log('Chat loading state:', isLoading);
 		const loadingClass = classes['chat-area--loading'];
 
-		// Проверяем наличие класса
 		if (loadingClass) {
-			// Используем add/remove
 			if (isLoading) {
-				this.addClass(loadingClass); // Используем метод BaseComponent
+				this.addClass(loadingClass);
 				this.showPlaceholder('Loading messages...');
 			} else {
-				this.removeClass(loadingClass); // Используем метод BaseComponent
+				this.removeClass(loadingClass);
+				this.updateDisplayAfterLoading();
 			}
 		} else {
 			console.warn(
 				"ChatAreaComponent: Loading CSS class 'chat-area--loading' not found in module!",
 			);
-			// Если класса нет, просто обновляем плейсхолдеры
 			if (isLoading) {
 				this.showPlaceholder('Loading messages...');
-			} // Логику для !isLoading оставим ниже
-		}
-
-		// Обновляем плейсхолдер/список в зависимости от состояния ПОСЛЕ загрузки
-		if (!isLoading) {
-			if (this.messages.length === 0 && this.currentChatPartner) {
-				this.showPlaceholder(
-					`This is the beginning of your conversation with ${this.currentChatPartner.login}`,
-				);
-			} else if (this.messages.length > 0) {
-				this.hidePlaceholder();
-			} else if (!this.currentChatPartner) {
-				// Если чат не выбран (маловероятно попасть сюда при isLoading=false, но на всякий случай)
-				this.showPlaceholder('Select a chat to start messaging');
+			} else {
+				this.updateDisplayAfterLoading();
 			}
 		}
 	}

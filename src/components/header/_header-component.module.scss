@@ -1,54 +1,41 @@
 @use '../../styles/base/variables' as *;
-@use '../../styles/base/mixins' as *;
+@use '../../styles/base/mixins' as mixins;
 
 .header {
-	background-color: var(--color-surface); // Белый фон
-	border-bottom: 1px solid var(--color-border); // Тонкая линия снизу
-	padding: 0 var(--container-padding); // Используем общие отступы контейнера
-	height: var(--header-height); // Фиксированная высота
-	box-shadow: var(--shadow-sm); // Небольшая тень
+	height: var(--header-height);
+	border-bottom: 1px solid var(--color-border);
+	background-color: var(--color-surface);
+	box-shadow: var(--shadow-sm);
 }
 
-// Используем обертку .container для выравнивания контента
 .container {
-	height: 100%; // Растянуть на всю высоту хедера
-	display: flex;
-	align-items: center; // Вертикальное выравнивание по центру
-	justify-content: space-between; // Распределить элементы по краям
-	gap: 1rem; // Пространство между элементами
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1rem;
+	place-items: center;
+	height: 100%;
 }
 
-.user-info {
-	// Контейнер для "Пользователь: Имя"
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	font-size: var(--font-size-sm);
-	color: var(--color-text-secondary);
+.current-user {
+	font-size: var(--font-size-md);
 
-	span {
-		font-weight: 600; // Делаем имя жирным
-		color: var(--color-text-primary);
+	@include mixins.media-md {
+		font-size: var(--font-size-sm);
 	}
 }
 
-.app-title {
-	// Название приложения "Веселый чатик"
+.app-name {
 	font-size: var(--font-size-lg);
 	font-weight: 600;
 	color: var(--color-text-primary);
-	// Центрируем (может потребоваться доп. обертка или flex-grow для соседних элементов)
-	// пока просто оставляем как есть
+
+	@include mixins.media-md {
+		font-size: var(--font-size-md);
+	}
 }
 
-.controls {
-	// Контейнер для кнопок справа
+.buttons {
 	display: flex;
+	gap: 0.75rem;
 	align-items: center;
-	gap: 0.75rem; // Расстояние между кнопками
-
-	// Можно задать стиль кнопок внутри хедера, если нужно
-	// :global(.button) { // Обращение к глобальному классу кнопки
-	//   padding: 0.5rem 1rem; // Сделать кнопки чуть меньше
-	// }
 }

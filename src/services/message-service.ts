@@ -142,6 +142,10 @@ export class MessageService {
 					message: { id: messageId },
 				});
 			console.log(`MessageService: Message ${messageId} deleted.`);
+			this.eventBus.publish(
+				'message:deletedSuccessfully',
+				responsePayload,
+			);
 			return responsePayload;
 		} catch (error) {
 			console.error(
@@ -173,6 +177,10 @@ export class MessageService {
 					message: { id: messageId, text: newText.trim() },
 				});
 			console.log(`MessageService: Message ${messageId} edited.`);
+			this.eventBus.publish(
+				'message:editedSuccessfully',
+				responsePayload,
+			);
 			return responsePayload;
 		} catch (error) {
 			console.error(

@@ -1,8 +1,7 @@
-// src/components/chat-area/_chat-area-component.module.scss
 @use '../../styles/base/mixins' as *;
 
 .chat-area {
-	position: relative; // Для псевдоэлемента лоадера
+	position: relative;
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
@@ -11,24 +10,21 @@
 	background-color: var(--color-surface);
 
 	&--loading {
-		// Стили, когда идет загрузка
-		cursor: progress; // Меняем курсор
+		cursor: progress;
 
-		// Пример: оверлей с прозрачностью и спиннер (можно сделать лучше)
 		&::after {
 			content: '';
 			position: absolute;
-			z-index: 10; // Поверх остального контента
-			inset: 0; // Растянуть на весь компонент
-			background-color: rgb(255 255 255 / 70%); // Полупрозрачный белый
+			z-index: 10;
+			inset: 0;
+			background-color: rgb(255 255 255 / 70%);
 		}
 
 		&::before {
-			// Спиннер
 			content: '';
 			position: absolute;
-			z-index: 11; // Поверх оверлея
-			top: 40%; // Примерно по центру (можно точнее)
+			z-index: 11;
+			top: 40%;
 			left: 50%;
 			transform: translate(-50%, -50%);
 			width: 30px;
@@ -71,10 +67,6 @@
 	border-radius: var(--border-radius);
 	font-size: var(--font-size-sm);
 
-	// Добавляем RGB переменные в variables.scss
-	// --color-success-rgb: 40, 167, 69;
-	// --color-text-secondary-rgb: 108, 117, 125;
-
 	&--online {
 		color: var(--color-success);
 		background-color: rgba(var(--color-success-rgb, 40, 167, 69), 0.1);
@@ -83,19 +75,17 @@
 	&--offline {
 		color: var(--color-text-secondary);
 		background-color: var(--color-secondary);
-
-		// background-color: rgba(var(--color-text-secondary-rgb, 108, 117, 125), 0.1);
 	}
 }
 
 .message-list {
-	// Плавная прокрутка
-	scroll-behavior: smooth;
-	overflow-y: auto;
+	scroll-behavior: auto;
+	overflow-y: scroll;
 	display: flex;
 	flex-direction: column;
 	flex-grow: 1;
 	gap: 0.75rem;
+	height: 100%;
 	padding: 1rem 1.2rem;
 
 	&.hidden {
@@ -117,11 +107,10 @@
 	}
 }
 
-// Стили сообщения
 .message-item {
 	display: flex;
 	flex-direction: column;
-	gap: 0.25rem; // Отступ между хедером, текстом и статусом
+	gap: 0.25rem;
 	max-width: 75%;
 	padding: 0.6rem 1rem;
 	border-radius: 12px;
@@ -145,30 +134,39 @@
 .message-header {
 	display: flex;
 	gap: 0.5rem;
-	align-items: baseline; // Выровнять по базовой линии
+	align-items: baseline;
 	justify-content: space-between;
 }
 
 .message-sender {
+	overflow: hidden;
 	font-size: var(--font-size-sm);
 	font-weight: 600;
-	opacity: 0.9; // Чуть менее заметный
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.9;
 }
 
 .message-time {
-	font-size: 0.75rem; // Еще меньше
+	flex-shrink: 0;
+	font-size: 0.75rem;
 	opacity: 0.7;
 }
 
 .message-text {
-	line-height: 1.4; // Улучшаем читаемость текста
+	line-height: 1.4;
 }
 
 .message-status {
-	margin-top: 0.1rem; // Маленький отступ сверху
 	font-size: 0.75rem;
-	text-align: right; // Статус справа
 	opacity: 0.7;
+}
+
+.message-edited-indicator {
+	margin-right: 0.25rem;
+	font-size: 0.7rem;
+	font-style: italic;
+	opacity: 0.6;
 }
 
 .chat-footer {
@@ -216,22 +214,53 @@
 	&:disabled {
 		cursor: not-allowed;
 		opacity: 0.6;
-		background-color: var(
-			--color-disabled-bg
-		); // Можно оставить базовый стиль disabled
+		background-color: var(--color-disabled-bg);
 	}
 }
 
-// --- Дополнительно: Стили для разделителя непрочитанных (позже) ---
-// .new-messages-divider {
-//   text-align: center;
-//   color: var(--color-accent);
-//   font-size: var(--font-size-sm);
-//   border-bottom: 1px solid var(--color-accent);
-//   margin: 0.5rem 0;
-//   line-height: 0.1em; // Трюк для линии
-//   span {
-//     background: var(--color-surface); // Фон под текстом
-//     padding: 0 10px;
-//   }
-// }
+.message-action-button {
+	cursor: pointer;
+	margin: 0;
+	padding: 2px 4px;
+	border: none;
+	border-radius: 3px;
+	font-size: 0.75rem;
+	color: inherit;
+	opacity: 0.6;
+	background: none;
+	transition:
+		opacity 0.2s,
+		background-color 0.2s;
+
+	&:hover {
+		opacity: 1;
+		background-color: rgb(0 0 0 / 10%);
+	}
+}
+
+.new-messages-divider {
+	display: flex;
+	align-items: center;
+	margin: 0.75rem 0;
+	font-size: var(--font-size-sm);
+	font-weight: 500;
+	color: var(--color-accent);
+	text-align: center;
+
+	&::before,
+	&::after {
+		content: '';
+		flex-grow: 1;
+		height: 1px;
+		opacity: 0.5;
+		background-color: var(--color-accent);
+	}
+
+	&::before {
+		margin-right: 0.5em;
+	}
+
+	&::after {
+		margin-left: 0.5em;
+	}
+}

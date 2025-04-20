@@ -3,11 +3,16 @@
 html,
 body {
 	overflow-x: hidden;
+	height: 100%;
 	min-height: 100vh;
 	font-family: var(--font-family);
 	font-size: var(--font-size-base);
 	color: var(--text-color-primary);
 	background-color: var(--background-color);
+}
+
+body {
+	// overflow-y: hidden;
 }
 
 @include mixins.media-md {

@@ -1,0 +1,25 @@
+.page {
+	display: grid;
+	grid-template:
+		'header header' auto
+		'contacts chat' 1fr
+		'footer footer' auto /
+		200px 1fr;
+	height: 100%;
+}
+
+.header {
+	grid-area: header;
+}
+
+.contacts {
+	grid-area: contacts;
+}
+
+.chat-area {
+	grid-area: chat;
+}
+
+.footer {
+	grid-area: footer;
+}
