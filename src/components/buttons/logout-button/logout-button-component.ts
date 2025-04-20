@@ -1,46 +1,40 @@
+// src/components/buttons/logout-button/logout-button-component.ts
 import type { EventBus } from '../../../services/event-bus';
-import ElementCreator from '../../../utils/element-creator';
 import { BaseComponent } from '../../base/component';
+import type { ElementParameters } from '../../../utils/element-creator';
 
-export class LogoutButtonComponent extends BaseComponent {
+export class LogoutButtonComponent extends BaseComponent<HTMLButtonElement> {
 	private readonly eventBus: EventBus;
 
-	private button: HTMLButtonElement | null = null;
-	private readonly customClasses: string[];
-
 	constructor(eventBus: EventBus, customClasses: string | string[] = []) {
-		super();
-		this.eventBus = eventBus;
-		this.customClasses = Array.isArray(customClasses)
-			? customClasses
-			: [customClasses].filter(Boolean);
-		this.addEventListeners();
-	}
-
-	public destroy(): void {
-		this.button?.removeEventListener('click', this.handleButtonClick);
-		super.destroy();
-	}
-
-	protected createView(): HTMLElement {
 		const allClasses = [
 			'button',
 			'button--outline',
-			...(this.customClasses || []),
+			...(Array.isArray(customClasses)
+				? customClasses
+				: [customClasses].filter(Boolean)),
 		];
-		this.button = ElementCreator.create({
+
+		const buttonParameters: ElementParameters = {
 			tag: 'button',
 			classes: allClasses,
 			content: 'Logout',
 			attributes: { type: 'button' },
-		}) as HTMLButtonElement;
+			on: {
+				click: () => this.handleButtonClick(),
+			},
+		};
 
-		return this.button;
+		super(buttonParameters);
+		this.eventBus = eventBus;
+		this.render();
+	}
+	public destroy(): void {
+		this.element.removeEventListener('click', this.handleButtonClick);
+		super.destroy();
 	}
 
-	private addEventListeners(): void {
-		this.element.addEventListener('click', this.handleButtonClick);
-	}
+	protected render(): void {}
 
 	private handleButtonClick = (): void => {
 		console.log('Logout button clicked, publishing ui:logoutRequest');

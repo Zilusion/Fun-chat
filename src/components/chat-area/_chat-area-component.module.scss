@@ -1,0 +1,237 @@
+// src/components/chat-area/_chat-area-component.module.scss
+@use '../../styles/base/mixins' as *;
+
+.chat-area {
+	position: relative; // Для псевдоэлемента лоадера
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	height: 100%;
+	background-color: var(--color-surface);
+
+	&--loading {
+		// Стили, когда идет загрузка
+		cursor: progress; // Меняем курсор
+
+		// Пример: оверлей с прозрачностью и спиннер (можно сделать лучше)
+		&::after {
+			content: '';
+			position: absolute;
+			z-index: 10; // Поверх остального контента
+			inset: 0; // Растянуть на весь компонент
+			background-color: rgb(255 255 255 / 70%); // Полупрозрачный белый
+		}
+
+		&::before {
+			// Спиннер
+			content: '';
+			position: absolute;
+			z-index: 11; // Поверх оверлея
+			top: 40%; // Примерно по центру (можно точнее)
+			left: 50%;
+			transform: translate(-50%, -50%);
+			width: 30px;
+			height: 30px;
+			border: 3px solid rgba(var(--color-primary-rgb), 0.3);
+			border-top-color: var(--color-primary);
+			border-radius: 50%;
+			animation: chat-loading-spinner 0.8s linear infinite;
+		}
+	}
+}
+
+@keyframes chat-loading-spinner {
+	to {
+		transform: translate(-50%, -50%) rotate(360deg);
+	}
+}
+
+.chat-header {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.8rem 1.2rem;
+	border-bottom: 1px solid var(--color-border);
+	background-color: var(--color-surface);
+
+	&.hidden {
+		display: none;
+	}
+}
+
+.partner-name {
+	font-weight: 600;
+	color: var(--color-text-primary);
+}
+
+.partner-status {
+	padding: 0.2rem 0.5rem;
+	border-radius: var(--border-radius);
+	font-size: var(--font-size-sm);
+
+	// Добавляем RGB переменные в variables.scss
+	// --color-success-rgb: 40, 167, 69;
+	// --color-text-secondary-rgb: 108, 117, 125;
+
+	&--online {
+		color: var(--color-success);
+		background-color: rgba(var(--color-success-rgb, 40, 167, 69), 0.1);
+	}
+
+	&--offline {
+		color: var(--color-text-secondary);
+		background-color: var(--color-secondary);
+
+		// background-color: rgba(var(--color-text-secondary-rgb, 108, 117, 125), 0.1);
+	}
+}
+
+.message-list {
+	// Плавная прокрутка
+	scroll-behavior: smooth;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	gap: 0.75rem;
+	padding: 1rem 1.2rem;
+
+	&.hidden {
+		display: none;
+	}
+}
+
+.placeholder {
+	display: flex;
+	flex-grow: 1;
+	align-items: center;
+	justify-content: center;
+	padding: 2rem;
+	color: var(--color-text-secondary);
+	text-align: center;
+
+	&.hidden {
+		display: none;
+	}
+}
+
+// Стили сообщения
+.message-item {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem; // Отступ между хедером, текстом и статусом
+	max-width: 75%;
+	padding: 0.6rem 1rem;
+	border-radius: 12px;
+	word-wrap: break-word;
+
+	&--incoming {
+		align-self: flex-start;
+		border-bottom-left-radius: 2px;
+		color: var(--color-text-on-secondary);
+		background-color: var(--color-secondary);
+	}
+
+	&--outgoing {
+		align-self: flex-end;
+		border-bottom-right-radius: 2px;
+		color: var(--color-text-on-primary);
+		background-color: var(--color-primary);
+	}
+}
+
+.message-header {
+	display: flex;
+	gap: 0.5rem;
+	align-items: baseline; // Выровнять по базовой линии
+	justify-content: space-between;
+}
+
+.message-sender {
+	font-size: var(--font-size-sm);
+	font-weight: 600;
+	opacity: 0.9; // Чуть менее заметный
+}
+
+.message-time {
+	font-size: 0.75rem; // Еще меньше
+	opacity: 0.7;
+}
+
+.message-text {
+	line-height: 1.4; // Улучшаем читаемость текста
+}
+
+.message-status {
+	margin-top: 0.1rem; // Маленький отступ сверху
+	font-size: 0.75rem;
+	text-align: right; // Статус справа
+	opacity: 0.7;
+}
+
+.chat-footer {
+	display: flex;
+	flex-shrink: 0;
+	gap: 0.8rem;
+	align-items: flex-end;
+	padding: 0.8rem 1.2rem;
+	border-top: 1px solid var(--color-border);
+	background-color: var(--color-surface);
+
+	&.hidden {
+		display: none;
+	}
+}
+
+.message-input {
+	resize: none;
+	overflow-y: auto;
+	flex-grow: 1;
+	max-height: 150px;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	font-size: var(--font-size-base);
+	line-height: 1.4;
+	outline: none;
+	transition: var(--transition);
+
+	&:focus {
+		border-color: var(--color-border-focus);
+		box-shadow: 0 0 0 2px rgba(var(--color-border-focus-rgb), 0.2);
+	}
+
+	&:disabled {
+		cursor: not-allowed;
+		background-color: var(--color-disabled-bg);
+	}
+}
+
+.send-button {
+	flex-shrink: 0;
+	padding: 0.6rem 1rem;
+
+	&:disabled {
+		cursor: not-allowed;
+		opacity: 0.6;
+		background-color: var(
+			--color-disabled-bg
+		); // Можно оставить базовый стиль disabled
+	}
+}
+
+// --- Дополнительно: Стили для разделителя непрочитанных (позже) ---
+// .new-messages-divider {
+//   text-align: center;
+//   color: var(--color-accent);
+//   font-size: var(--font-size-sm);
+//   border-bottom: 1px solid var(--color-accent);
+//   margin: 0.5rem 0;
+//   line-height: 0.1em; // Трюк для линии
+//   span {
+//     background: var(--color-surface); // Фон под текстом
+//     padding: 0 10px;
+//   }
+// }

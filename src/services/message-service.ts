@@ -8,17 +8,19 @@ import type {
 	MessageReadResponsePayload,
 	MessageSendResponsePayload,
 } from '../types/api-types';
+import type { EventBus } from './event-bus';
 
 /**
  * Сервис для инкапсуляции логики взаимодействия с API сообщений чата.
  */
 export class MessageService {
 	private readonly wsService: WebSocketService;
+	private readonly eventBus: EventBus;
 	// EventBus пока не нужен, если сервис только отправляет запросы и возвращает результат
 
-	constructor(wsService: WebSocketService /* , eventBus: EventBus */) {
+	constructor(wsService: WebSocketService, eventBus: EventBus) {
 		this.wsService = wsService;
-		// this.eventBus = eventBus;
+		this.eventBus = eventBus;
 	}
 
 	/**
@@ -51,10 +53,12 @@ export class MessageService {
 						text: messageText.trim(), // Убираем лишние пробелы
 					},
 				});
+			const sentMessageData = responsePayload.message;
 			console.log(
 				`MessageService: Message sent successfully (ID: ${responsePayload.message.id})`,
 			);
 			// Возвращаем объект сообщения из payload ответа
+			this.eventBus.publish('message:sentSuccessfully', sentMessageData);
 			return responsePayload.message;
 		} catch (error) {
 			console.error(

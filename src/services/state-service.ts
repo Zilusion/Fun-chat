@@ -126,6 +126,17 @@ export class StateService {
 				isEdited: true,
 			});
 		});
+		this.eventBus.subscribe(
+			'message:sentSuccessfully',
+			(sentMessageData) => {
+				// Наше собственное сообщение было успешно отправлено
+				console.log(
+					'StateService: Handling successfully sent message:',
+					sentMessageData.id,
+				);
+				this.handleNewMessage(sentMessageData); // Используем тот же обработчик
+			},
+		);
 
 		// События от UI
 		this.eventBus.subscribe('ui:selectChat', ({ userId }) => {
@@ -197,34 +208,40 @@ export class StateService {
 		}
 	}
 
-	// Обработка нового входящего или исходящего (после ответа сервера) сообщения
 	private handleNewMessage(message: MessageData): void {
 		const currentUserLogin = this.state.currentUser?.login;
-		if (!currentUserLogin) return; // Не обрабатываем, если не авторизованы
+		if (!currentUserLogin) return;
 
 		const isOutgoing = message.from === currentUserLogin;
 		const chatPartnerLogin = isOutgoing ? message.to : message.from;
 
-		// Добавляем сообщение в текущий чат, если он выбран
+		// Добавляем сообщение в текущий чат, если он выбран И сообщение относится к нему
 		if (this.state.selectedChatUserId === chatPartnerLogin) {
-			// Проверяем, нет ли уже такого сообщения (на всякий случай)
 			if (
-				!this.state.currentChatMessages.some((m) => m.id === message.id)
+				this.state.currentChatMessages.some((m) => m.id === message.id)
 			) {
+				// Если сообщение уже есть (например, пришло уведомление server:messageReceived
+				// почти одновременно с message:sentSuccessfully - маловероятно, но возможно),
+				// можно просто обновить его статус, если он отличается.
+				// Но пока оставим так.
+				console.warn(
+					`StateService: Message ${message.id} already exists in current chat.`,
+				);
+			} else {
 				this.state.currentChatMessages.push(message);
-				// Сортируем по времени, если порядок не гарантирован
 				this.state.currentChatMessages.sort(
 					(a, b) => a.datetime - b.datetime,
 				);
 				this.publishStateChange();
 				this.eventBus.publish('state:currentMessagesUpdated', [
 					...this.state.currentChatMessages,
-				]); // Отправляем копию
+				]);
 			}
 		} else if (!isOutgoing) {
-			// Если сообщение входящее и чат НЕ выбран, увеличиваем счетчик непрочитанных
+			// Увеличиваем счетчик непрочитанных ТОЛЬКО для ВХОДЯЩИХ сообщений не из текущего чата
 			this.incrementUnreadCount(chatPartnerLogin);
 		}
+		// Для исходящих сообщений в неактивном чате счетчик увеличивать не нужно.
 	}
 
 	// Обновляет статус существующего сообщения в текущем чате

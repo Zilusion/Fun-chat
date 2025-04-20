@@ -18,7 +18,6 @@ export class LoginPage extends BaseComponent {
 	private readonly authService: AuthService;
 	private readonly eventBus: EventBus;
 
-	private page: HTMLElement | null = null;
 	private container: HTMLElement | null = null;
 	private loginForm: HTMLFormElement | null = null;
 	private fieldSet: HTMLFieldSetElement | null = null;
@@ -44,11 +43,16 @@ export class LoginPage extends BaseComponent {
 	};
 
 	constructor(authService: AuthService, eventBus: EventBus) {
-		super();
+		super({
+			tag: 'main',
+			classes: classes['page'],
+		});
+
 		this.authService = authService;
 		this.eventBus = eventBus;
 
-		this.configureComponent();
+		this.render();
+
 		this.addEventListeners();
 		this.subscribeToEvents();
 		this.updateSubmitButtonState();
@@ -73,15 +77,7 @@ export class LoginPage extends BaseComponent {
 		super.destroy();
 	}
 
-	protected createView(): HTMLElement {
-		this.page = ElementCreator.create({
-			tag: 'main',
-			classes: classes['page'],
-		}) as HTMLElement;
-		return this.page;
-	}
-
-	private configureComponent(): void {
+	protected render(): void {
 		this.container = ElementCreator.create({
 			tag: 'div',
 			classes: ['container', classes['container']],

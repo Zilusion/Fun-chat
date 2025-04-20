@@ -10,13 +10,14 @@ import { LoginPage } from './components/pages/login-page/login-page';
 import { MainPage } from './components/pages/main-page/main-page';
 import { AboutPage } from './components/pages/about-page/about-page';
 import { Router } from './router/router'; // <-- Импортируем Router
+import { MessageService } from './services/message-service';
 
 // --- Инициализация сервисов ---
 const eventBus = new EventBus();
 const wsService = new WebSocketService('ws://127.0.0.1:4000/', eventBus);
 const stateService = new StateService(eventBus);
 const authService = new AuthService(wsService, eventBus);
-// const messageService = new MessageService(wsService);
+const messageService = new MessageService(wsService, eventBus);
 
 let savedLogin: string | null = null;
 let savedPassword: string | null = null;
@@ -43,7 +44,8 @@ function readCredentialsFromStorage(): void {
 
 const routes: Record<string, () => BaseComponent> = {
 	'#/login': () => new LoginPage(authService, eventBus),
-	'#/main': () => new MainPage(authService, eventBus, stateService),
+	'#/main': () =>
+		new MainPage(authService, eventBus, stateService, messageService),
 	'#/about': () => new AboutPage(),
 };
 

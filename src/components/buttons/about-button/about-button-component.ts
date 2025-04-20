@@ -1,45 +1,37 @@
-import ElementCreator from '../../../utils/element-creator';
+// src/components/buttons/about-button/about-button-component.ts
 import { BaseComponent } from '../../base/component';
+import type { ElementParameters } from '../../../utils/element-creator';
 
-export class AboutButtonComponent extends BaseComponent {
-	private button: HTMLButtonElement | null = null;
-	private readonly customClasses: string[];
-
+export class AboutButtonComponent extends BaseComponent<HTMLButtonElement> {
 	constructor(customClasses: string | string[] = []) {
-		super();
-		this.customClasses = Array.isArray(customClasses)
-			? customClasses
-			: [customClasses].filter(Boolean);
-		this.addEventListeners();
-	}
-
-	public destroy(): void {
-		this.button?.removeEventListener('click', this.handleButtonClick);
-		super.destroy();
-	}
-
-	protected createView(): HTMLElement {
 		const allClasses = [
 			'button',
 			'button--outline',
-			...(this.customClasses || []),
+			...(Array.isArray(customClasses)
+				? customClasses
+				: [customClasses].filter(Boolean)),
 		];
-		this.button = ElementCreator.create({
+
+		const buttonParameters: ElementParameters = {
 			tag: 'button',
 			classes: allClasses,
-			content: 'About',
+			content: 'Info',
 			attributes: { type: 'button' },
-		}) as HTMLButtonElement;
+			on: {
+				click: () => this.handleButtonClick(),
+			},
+		};
 
-		return this.button;
+		super(buttonParameters);
+		this.render();
 	}
 
-	private addEventListeners(): void {
-		this.element.addEventListener(
-			'click',
-			this.handleButtonClick.bind(this),
-		);
+	public destroy(): void {
+		this.element.removeEventListener('click', this.handleButtonClick);
+		super.destroy();
 	}
+
+	protected render(): void {}
 
 	private handleButtonClick = (): void => {
 		console.log('Info button clicked');

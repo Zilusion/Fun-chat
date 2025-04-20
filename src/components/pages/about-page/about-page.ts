@@ -4,27 +4,21 @@ import { BaseComponent } from '../../base/component';
 import classes from './_about-page.module.scss';
 
 export class AboutPage extends BaseComponent {
-	private page: HTMLElement | null = null;
 	private container: HTMLElement | null = null;
 	private title: HTMLHeadingElement | null = null;
 	private creator: HTMLElement | null = null;
 	private goBackButton: HTMLButtonElement | null = null;
 
 	constructor() {
-		super();
-		this.configureComponent();
+		super({
+			tag: 'main',
+			classes: classes['about-page'],
+		});
+		this.render();
 		this.addEventListeners();
 	}
 
-	protected createView(): HTMLElement {
-		this.page = ElementCreator.create({
-			tag: 'main',
-			classes: classes['about-page'],
-		}) as HTMLElement;
-		return this.page;
-	}
-
-	private configureComponent(): void {
+	protected render(): void {
 		this.container = ElementCreator.create({
 			tag: 'div',
 			classes: ['container', classes['container']],

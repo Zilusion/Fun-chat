@@ -1,46 +1,144 @@
-// .contacts-item {
-// 	position: relative;
-// 	padding-left: 15px;
-// 	cursor: pointer;
+// // .contacts-item {
+// // 	position: relative;
+// // 	padding-left: 15px;
+// // 	cursor: pointer;
 
+// // 	&::before {
+// // 		position: absolute;
+// // 		content: '';
+// // 		width: 10px;
+// // 		height: 10px;
+// // 		top: 50%;
+// // 		left: 0;
+// // 		translate: 0 -50%;
+// // 		background-color: red;
+// // 		border-radius: 50%;
+// // 	}
+
+// // 	&--online::before {
+// // 		background-color: green;
+// // 	}
+// // }
+// // src/components/contacts/_contacts-component.module.scss
+// @use '../../styles/base/mixins' as *;   // Доступ к миксинам
+
+// .contacts {
+// 	// Стили для всего блока контактов (aside)
+// 	display: flex;
+// 	flex-direction: column; // Поиск сверху, список снизу
+// 	padding: 1rem;
+// 	background-color: var(--color-surface); // Или другой фон, если нужно
+// 	border-right: 1px solid var(--color-border); // Граница справа
+// 	height: 100%; // Занимает всю высоту родителя (например, grid ячейки)
+// 	overflow-y: hidden; // Скролл будет у списка
+// }
+
+// .search-input {
+// 	// Стили для поля поиска
+// 	width: 100%;
+// 	padding: 0.6rem 0.8rem;
+// 	margin-bottom: 1rem; // Отступ снизу
+// 	border: 1px solid var(--color-border);
+// 	border-radius: var(--border-radius);
+// 	font-size: var(--font-size-sm); // Чуть меньше базового
+// 	outline: none;
+// 	transition: var(--transition);
+
+// 	&:focus {
+// 		border-color: var(--color-border-focus);
+// 		box-shadow: 0 0 0 2px rgba(var(--color-border-focus-rgb), 0.2);
+// 	}
+// }
+
+// .contacts-list {
+// 	// Стили для списка ul
+// 	list-style: none;
+// 	padding: 0;
+// 	margin: 0;
+// 	flex-grow: 1; // Занимает оставшееся место
+// 	overflow-y: auto; // Добавляем скролл, если список не помещается
+// 	display: flex;
+// 	flex-direction: column;
+// 	gap: 0.5rem; // Небольшой отступ между контактами
+// }
+
+// .contacts-item {
+// 	// Стили для элемента списка li
+// 	position: relative;
+// 	padding: 0.4rem 0.4rem 0.4rem 20px; // Отступ слева для индикатора
+// 	cursor: pointer;
+// 	border-radius: var(--border-radius);
+// 	transition: background-color 0.15s ease-in-out;
+// 	white-space: nowrap; // Запретить перенос имени
+// 	overflow: hidden; // Скрыть выходящий текст
+// 	text-overflow: ellipsis; // Добавить троеточие
+
+// 	&:hover {
+// 		background-color: var(--color-secondary); // Подсветка при наведении
+// 	}
+
+// 	// TODO: Стиль для активного/выбранного контакта
+// 	// &.contacts-item--active {
+// 	//   background-color: var(--color-primary);
+// 	//   color: var(--color-text-on-primary);
+// 	//   &::before { // Изменить цвет индикатора для активного, если нужно
+// 	//      background-color: var(--color-text-on-primary);
+// 	//   }
+// 	// }
+
+// 	// Базовый стиль индикатора (оффлайн)
 // 	&::before {
 // 		position: absolute;
 // 		content: '';
-// 		width: 10px;
-// 		height: 10px;
+// 		width: 8px; // Меньше размер
+// 		height: 8px;
 // 		top: 50%;
-// 		left: 0;
-// 		translate: 0 -50%;
-// 		background-color: red;
+// 		left: 5px; // Ближе к краю
+// 		transform: translateY(-50%);
+// 		background-color: var(--color-text-secondary); // Серый для оффлайн
 // 		border-radius: 50%;
+// 		transition: background-color 0.2s ease; // Плавная смена цвета
 // 	}
 
-// 	&--online::before {
-// 		background-color: green;
+// 	// Модификатор для онлайн статуса
+// 	&--online {
+// 		&::before {
+// 			background-color: var(--color-success); // Зеленый для онлайн
+// 		}
 // 	}
+
+//     // Модификатор для оффлайн статуса (необязателен, т.к. есть базовый стиль)
+//     &--offline {
+//         // Можно добавить стили для оффлайн, если нужно (например, сделать текст серым)
+//         // color: var(--color-text-secondary);
+//         &::before {
+//              background-color: var(--color-text-secondary); // Явно серый
+//         }
+//     }
+
+// 	// TODO: Элемент для счетчика непрочитанных
+// 	// .unread-badge { ... }
 // }
 // src/components/contacts/_contacts-component.module.scss
-@use '../../styles/base/mixins' as *;   // Доступ к миксинам
+@use '../../styles/base/mixins' as *;
 
 .contacts {
-	// Стили для всего блока контактов (aside)
+	overflow-y: hidden;
 	display: flex;
-	flex-direction: column; // Поиск сверху, список снизу
+	flex-direction: column;
+	height: 100%;
 	padding: 1rem;
-	background-color: var(--color-surface); // Или другой фон, если нужно
-	border-right: 1px solid var(--color-border); // Граница справа
-	height: 100%; // Занимает всю высоту родителя (например, grid ячейки)
-	overflow-y: hidden; // Скролл будет у списка
+	border-right: 1px solid var(--color-border);
+	background-color: var(--color-surface);
 }
 
 .search-input {
-	// Стили для поля поиска
 	width: 100%;
+	margin-bottom: 1rem;
 	padding: 0.6rem 0.8rem;
-	margin-bottom: 1rem; // Отступ снизу
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius);
-	font-size: var(--font-size-sm); // Чуть меньше базового
+	font-size: var(--font-size-sm);
 	outline: none;
 	transition: var(--transition);
 
@@ -51,71 +149,101 @@
 }
 
 .contacts-list {
-	// Стили для списка ul
-	list-style: none;
-	padding: 0;
-	margin: 0;
-	flex-grow: 1; // Занимает оставшееся место
-	overflow-y: auto; // Добавляем скролл, если список не помещается
+	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
-	gap: 0.5rem; // Небольшой отступ между контактами
+	flex-grow: 1;
+	gap: 0.1rem; // Уменьшим gap для плотного списка
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .contacts-item {
-	// Стили для элемента списка li
-	position: relative;
-	padding: 0.4rem 0.4rem 0.4rem 20px; // Отступ слева для индикатора
 	cursor: pointer;
+	position: relative; // Для позиционирования индикатора и счетчика
+	display: flex; // Для выравнивания имени и счетчика
+	align-items: center;
+	justify-content: space-between; // Разнести имя и счетчик
+	padding: 0.5rem 0.8rem 0.5rem 22px; // Увеличим отступ слева под индикатор
 	border-radius: var(--border-radius);
+	white-space: nowrap;
 	transition: background-color 0.15s ease-in-out;
-	white-space: nowrap; // Запретить перенос имени
-	overflow: hidden; // Скрыть выходящий текст
-	text-overflow: ellipsis; // Добавить троеточие
+
+	// Индикатор статуса
+	&::before {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 7px; // Подвинем чуть правее
+		transform: translateY(-50%);
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		transition: background-color 0.2s ease;
+	}
+
+	// overflow: hidden; // Уберем, чтобы видеть счетчик
+	// text-overflow: ellipsis; // Уберем
+
+	// Имя пользователя (внутри span)
+	> span:first-child {
+		overflow: hidden;
+		flex-grow: 1; // Занять место, чтобы счетчик прижался вправо
+		margin-right: 0.5rem; // Отступ от счетчика
+		text-overflow: ellipsis;
+	}
 
 	&:hover {
-		background-color: var(--color-secondary); // Подсветка при наведении
+		background-color: var(--color-secondary);
 	}
 
-	// TODO: Стиль для активного/выбранного контакта
-	// &.contacts-item--active {
-	//   background-color: var(--color-primary);
-	//   color: var(--color-text-on-primary);
-	//   &::before { // Изменить цвет индикатора для активного, если нужно
-	//      background-color: var(--color-text-on-primary);
-	//   }
-	// }
-
-	// Базовый стиль индикатора (оффлайн)
-	&::before {
-		position: absolute;
-		content: '';
-		width: 8px; // Меньше размер
-		height: 8px;
-		top: 50%;
-		left: 5px; // Ближе к краю
-		transform: translateY(-50%);
-		background-color: var(--color-text-secondary); // Серый для оффлайн
-		border-radius: 50%;
-		transition: background-color 0.2s ease; // Плавная смена цвета
+	// Стиль для активного/выбранного контакта
+	&--active {
+		background-color: rgba(var(--color-primary-rgb), 0.15); // Легкий фон
+		// color: var(--color-primary); // Можно изменить цвет текста
+		// font-weight: 500;
 	}
 
-	// Модификатор для онлайн статуса
 	&--online {
 		&::before {
-			background-color: var(--color-success); // Зеленый для онлайн
+			background-color: var(--color-success);
 		}
 	}
 
-    // Модификатор для оффлайн статуса (необязателен, т.к. есть базовый стиль)
-    &--offline {
-        // Можно добавить стили для оффлайн, если нужно (например, сделать текст серым)
-        // color: var(--color-text-secondary);
-        &::before {
-             background-color: var(--color-text-secondary); // Явно серый
-        }
-    }
+	&--offline {
+		&::before {
+			background-color: var(--color-text-secondary);
+		}
+	}
 
-	// TODO: Элемент для счетчика непрочитанных
-	// .unread-badge { ... }
+	// Опциональный класс для элементов с непрочитанными
+	&--unread {
+		// Можно сделать имя жирнее
+		// > span:first-child {
+		//     font-weight: 600;
+		// }
+	}
+}
+
+// Стиль для счетчика непрочитанных
+.unread-badge {
+	display: inline-flex; // Чтобы работал padding/размеры
+	flex-shrink: 0; // Не сжиматься
+	align-items: center;
+	justify-content: center;
+	min-width: 18px; // Минимальная ширина
+	height: 18px; // Высота
+	margin-left: auto; // Прижать вправо (если flex не сработает)
+	padding: 0 5px; // Горизонтальные отступы
+	border-radius: 9px; // Сделать круглым или овальным
+	font-size: 0.75rem; // Маленький
+	font-weight: 600;
+	color: var(--color-text-on-primary); // Белый текст
+	background-color: var(--color-accent); // Цвет акцента
+
+	// Скрываем, если нет контента (добавляется/удаляется JS)
+	&.hidden {
+		display: none;
+	}
 }

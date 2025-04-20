@@ -50,6 +50,8 @@ export type EventPayloadMap = {
 	// Optionally: general state change event for debugging
 	'state:changed': Readonly<AppState>;
 
+	'message:sentSuccessfully': MessageData;
+
 	// --- UI events ---
 	'ui:loginRequest': { login: string; password: string };
 	'ui:logoutRequest': void;
