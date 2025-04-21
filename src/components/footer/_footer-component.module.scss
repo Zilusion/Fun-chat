@@ -1,0 +1,37 @@
+@use '../../styles/base/mixins' as mixins;
+
+.footer {
+	height: var(--header-height);
+	border-top: 1px solid var(--color-border);
+	background-color: var(--color-surface);
+	box-shadow: var(--shadow-sm);
+}
+
+.container {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1rem;
+	place-items: center;
+	height: 100%;
+}
+
+.school {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+.school-logo {
+	width: 20px;
+	height: 20px;
+}
+
+.school-link,
+.creator {
+	border-bottom: 2px solid transparent;
+	transition: var(--transition);
+
+	&:hover {
+		border-bottom: 2px solid var(--color-primary);
+	}
+}

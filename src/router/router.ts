@@ -1,4 +1,3 @@
-// src/router/router.ts
 import type { BaseComponent } from '../components/base/component';
 import type { StateService } from '../services/state-service';
 import type { EventBus } from '../services/event-bus';

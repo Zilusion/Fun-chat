@@ -11,10 +11,6 @@ body {
 	background-color: var(--background-color);
 }
 
-body {
-	// overflow-y: hidden;
-}
-
 @include mixins.media-md {
 	:root {
 		--container-padding: 20px;

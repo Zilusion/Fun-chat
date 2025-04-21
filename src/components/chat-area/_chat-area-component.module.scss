@@ -111,7 +111,8 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
-	max-width: 75%;
+	min-width: 25%;
+	max-width: 80%;
 	padding: 0.6rem 1rem;
 	border-radius: 12px;
 	word-wrap: break-word;
@@ -128,6 +129,20 @@
 		border-bottom-right-radius: 2px;
 		color: var(--color-text-on-primary);
 		background-color: var(--color-primary);
+	}
+
+	&--pending {
+		pointer-events: none;
+		opacity: 0.6;
+		background-color: rgba(
+			var(--color-text-secondary-rgb, 108, 117, 125),
+			0.1
+		);
+	}
+
+	&--editing {
+		outline: 2px solid var(--color-accent);
+		outline-offset: -2px;
 	}
 }
 
@@ -158,6 +173,7 @@
 }
 
 .message-status {
+	margin-right: 0.5rem;
 	font-size: 0.75rem;
 	opacity: 0.7;
 }
@@ -167,6 +183,13 @@
 	font-size: 0.7rem;
 	font-style: italic;
 	opacity: 0.6;
+}
+
+.message-footer {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+	justify-content: flex-end;
 }
 
 .chat-footer {
@@ -205,6 +228,15 @@
 		cursor: not-allowed;
 		background-color: var(--color-disabled-bg);
 	}
+
+	&--editing {
+		border-color: var(--color-accent);
+		box-shadow: 0 0 0 2px rgba(var(--color-accent-rgb, 60, 187, 180), 0.2);
+	}
+
+	&--error {
+		border-color: var(--color-error) !important;
+	}
 }
 
 .send-button {
@@ -215,6 +247,43 @@
 		cursor: not-allowed;
 		opacity: 0.6;
 		background-color: var(--color-disabled-bg);
+	}
+
+	&--save {
+		border-color: var(--color-success);
+		background-color: var(--color-success);
+
+		&:hover:not(:disabled) {
+			border-color: var(--color-success);
+			background-color: var(--color-success);
+			filter: brightness(0.9);
+		}
+
+		&:focus-visible {
+			outline-color: var(--color-success);
+			box-shadow: 0 0 0 3px
+				rgba(var(--color-success-rgb, 40, 167, 69), 0.3);
+		}
+	}
+}
+
+.cancel-button {
+	flex-shrink: 0;
+	padding: 0.6rem 1rem;
+	border-color: var(--color-text-secondary);
+	color: var(--color-text-secondary);
+
+	&:hover:not(:disabled) {
+		border-color: var(--color-text-primary);
+		color: var(--color-text-primary);
+		background-color: rgba(
+			var(--color-text-secondary-rgb, 108, 117, 125),
+			0.1
+		);
+	}
+
+	&.hidden {
+		display: none;
 	}
 }
 

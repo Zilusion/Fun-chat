@@ -1,40 +1,42 @@
 :root {
-	// --- Размеры ---
-	--container-width: 1024px; // Макс. ширина основного контента
-	--container-padding: 20px; // Отступы по бокам контейнера (уменьшил для начала)
-	--header-height: 60px; // Высота хедера
-	--footer-height: 50px; // Высота футера
+	// --- Sizes ---
+	--container-width: 1024px;
+	--container-padding: 20px;
+	--header-height: 60px;
+	--footer-height: 50px;
 
-	// --- Цвета (Светлая тема) ---
-	--color-background: #f4f7f6; // Очень светло-серый фон страницы
-	--color-surface: #ffffff; // Белый фон для элементов (форма, чат)
-	--color-primary: #5c85d6; // Приглушенный синий для акцентов и кнопок
-	--color-primary-dark: #4a6eaa; // Темнее синий для hover/active
-	--color-primary-rgb: 92, 133, 214; // RGB для box-shadow с прозрачностью
-	--color-secondary: #e7eaed; // Светло-серый для второстепенных фонов/границ
-	--color-accent: #3cbbb4; // Бирюзовый для индикаторов, непрочитанных (пример)
-	--color-text-primary: #212529; // Почти черный для основного текста
-	--color-text-secondary: #6c757d; // Серый для второстепенного текста (лейблы, время)
-	--color-text-on-primary: #ffffff; // Белый текст на синих кнопках
-	--color-text-on-secondary: #212529; // Темный текст на светло-серых фонах
-	--color-border: #d1d9e0; // Цвет границ для инпутов, разделителей
-	--color-border-focus: #8ab4f8; // Светло-синий для фокуса инпутов
-	--color-border-focus-rgb: 138, 180, 248; // RGB для box-shadow фокуса
-	--color-error: #dc3545; // Красный для ошибок валидации
-	--color-success: #28a745; // Зеленый для индикаторов онлайна
-	--color-disabled-bg: #e9ecef; // Фон неактивных элементов
-	--color-disabled-text: #adb5bd; // Текст неактивных элементов
-	--color-shadow: rgba(0, 0, 0, 0.1); // Цвет тени
+	// --- Colors ---
+	--color-background: #f4f7f6;
+	--color-surface: #fff;
+	--color-primary: #5c85d6;
+	--color-primary-dark: #4a6eaa;
+	--color-primary-rgb: 92, 133, 214;
+	--color-secondary: #e7eaed;
+	--color-accent: #3cbbb4;
+	--color-text-primary: #212529;
+	--color-text-secondary: #6c757d;
+	--color-text-on-primary: #fff;
+	--color-text-on-secondary: #212529;
+	--color-border: #d1d9e0;
+	--color-border-focus: #8ab4f8;
+	--color-border-focus-rgb: 138, 180, 248;
+	--color-error: #dc3545;
+	--color-success: #28a745;
+	--color-disabled-bg: #e9ecef;
+	--color-disabled-text: #adb5bd;
+	--color-shadow: rgb(0 0 0 / 10%);
 
-	// --- Типографика ---
+	// --- Typography ---
 	--font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--font-size-base: 16px; // Базовый размер шрифта
-	--font-size-sm: 0.875rem; // 14px
-	--font-size-lg: 1.25rem; // 20px
+	--font-size-base: 16px;
+	--font-size-sm: 0.875rem;
+	--font-size-lg: 1.25rem;
+	--font-size-xl: 1.5rem;
+	--font-size-xxl: 2rem;
 
-	// --- Другое ---
-	--border-radius: 6px; // Скругление углов
-	--transition: all 0.2s ease-in-out; // Плавность переходов
+	// --- Other ---
+	--border-radius: 6px;
+	--transition: all 0.2s ease-in-out;
 	--shadow-sm: 0 1px 2px 0 var(--color-shadow);
 	--shadow-md:
 		0 4px 6px -1px var(--color-shadow), 0 2px 4px -2px var(--color-shadow);

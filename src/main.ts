@@ -1,28 +1,28 @@
-// src/main.ts
 import './styles/main.scss';
 import { AuthService } from './services/auth-service';
 import { EventBus } from './services/event-bus';
 import { StateService } from './services/state-service';
 import { WebSocketService } from './services/web-socket-service';
-// import { MessageService } from './services/message-service';
 import type { BaseComponent } from './components/base/component';
 import { LoginPage } from './components/pages/login-page/login-page';
 import { MainPage } from './components/pages/main-page/main-page';
 import { AboutPage } from './components/pages/about-page/about-page';
-import { Router } from './router/router'; // <-- Импортируем Router
+import { Router } from './router/router';
 import { MessageService } from './services/message-service';
+import { ConnectionStatusModalComponent } from './components/modals/connection-modal/connection-modal-component';
 
-// --- Инициализация сервисов ---
+const SERVER_URL = 'ws://127.0.0.1:4000/';
+
 const eventBus = new EventBus();
-const wsService = new WebSocketService('ws://127.0.0.1:4000/', eventBus);
+const wsService = new WebSocketService(SERVER_URL, eventBus);
 const authService = new AuthService(wsService, eventBus);
 const messageService = new MessageService(wsService, eventBus);
 const stateService = new StateService(eventBus, messageService);
 
 let savedLogin: string | null = null;
 let savedPassword: string | null = null;
-let autoLoginAttempted = false;
-let isInitialAuthCheckComplete = false;
+let isInitialNavigationDone = false;
+let isAutoLoginInProcess = false;
 
 function readCredentialsFromStorage(): void {
 	try {
@@ -44,8 +44,7 @@ function readCredentialsFromStorage(): void {
 
 const routes: Record<string, () => BaseComponent> = {
 	'#/login': () => new LoginPage(authService, eventBus),
-	'#/main': () =>
-		new MainPage(authService, eventBus, stateService, messageService),
+	'#/main': () => new MainPage(eventBus, stateService, messageService),
 	'#/about': () => new AboutPage(),
 };
 
@@ -54,26 +53,39 @@ const mainContentElement: HTMLElement = document.body;
 const router = new Router(routes, mainContentElement, stateService, eventBus);
 
 function runInitialNavigationIfReady(): void {
-	if (!isInitialAuthCheckComplete) {
+	if (isInitialNavigationDone) {
 		console.log(
-			'Initial auth check not complete yet, delaying navigation.',
+			'Initial navigation done, ensuring router state is consistent...',
 		);
-		return;
+		router.handleNavigation();
+	} else {
+		if (isAutoLoginInProcess) {
+			console.log(
+				'Auto-login in progress, delaying initial navigation...',
+			);
+		} else {
+			console.log('Running initial navigation...');
+			isInitialNavigationDone = true;
+			router.handleNavigation();
+		}
 	}
-	console.log('Initial auth check complete, running initial navigation...');
-	router.handleNavigation();
 }
 
 readCredentialsFromStorage();
 
+const connectionModal = new ConnectionStatusModalComponent(eventBus);
+mainContentElement.append(connectionModal.getElement());
+
 eventBus.subscribe('auth:loginSuccess', (user) => {
 	console.log(`>>> Login successful for ${user.login} (main.ts)`);
-	isInitialAuthCheckComplete = true;
+	isAutoLoginInProcess = false;
+	isInitialNavigationDone = false;
 	runInitialNavigationIfReady();
 });
 
 eventBus.subscribe('auth:loginFailed', (error) => {
 	console.error(`>>> Login failed (main.ts):`, error.message);
+	isAutoLoginInProcess = false;
 	try {
 		sessionStorage.removeItem('chatUserLogin');
 		sessionStorage.removeItem('chatUserPassword');
@@ -82,8 +94,8 @@ eventBus.subscribe('auth:loginFailed', (error) => {
 	}
 	savedLogin = null;
 	savedPassword = null;
-	autoLoginAttempted = true;
-	isInitialAuthCheckComplete = true;
+	stateService.resetStateOnLogout();
+	isInitialNavigationDone = false;
 	runInitialNavigationIfReady();
 });
 
@@ -114,26 +126,33 @@ eventBus.subscribe('ui:logoutRequest', () => {
 
 eventBus.subscribe('websocket:open', () => {
 	console.log('>>> WebSocket connection opened/re-established (main.ts)');
-	const currentUser = stateService.getCurrentUser();
+	readCredentialsFromStorage();
+	connectionModal.close();
 
-	if (currentUser) {
-		console.log(
-			`>>> User ${currentUser.login} was already logged in. Refreshing data...`,
-		);
-		void authService.refreshDataAfterReconnect();
-		autoLoginAttempted = true;
-		isInitialAuthCheckComplete = true;
-		runInitialNavigationIfReady();
-	} else if (savedLogin && savedPassword && !autoLoginAttempted) {
-		console.log(`>>> Attempting auto-login for ${savedLogin}...`);
-		autoLoginAttempted = true;
-		void authService.login(savedLogin, savedPassword);
-		savedPassword = null;
+	if (savedLogin && savedPassword) {
+		if (isAutoLoginInProcess) {
+			console.log(
+				'>>> Auto-login/re-authorization already in progress, skipping duplicate attempt.',
+			);
+		} else {
+			console.log(
+				`>>> Attempting re-authorization/auto-login for ${savedLogin}...`,
+			);
+			isAutoLoginInProcess = true;
+			void authService.login(savedLogin, savedPassword).finally(() => {});
+			savedPassword = null;
+		}
 	} else {
-		console.log('>>> Auto-login not needed or already attempted.');
-		isInitialAuthCheckComplete = true;
+		console.log(
+			'>>> No saved credentials found. Running initial navigation check...',
+		);
+		isInitialNavigationDone = false;
 		runInitialNavigationIfReady();
 	}
+});
+
+eventBus.subscribe('websocket:status', (status) => {
+	connectionModal.updateStatus(status);
 });
 
 eventBus.subscribe('state:userListUpdated', (users) => {
@@ -153,6 +172,9 @@ eventBus.subscribe('websocket:close', (payload) => {
 	console.warn(
 		`>>> WebSocket closed (main.ts): Code ${payload.code}, Clean: ${payload.wasClean}, Reason: ${payload.reason}`,
 	);
+	if (!payload.wasClean) {
+		connectionModal.updateStatus('disconnected');
+	}
 });
 eventBus.subscribe('websocket:error', (errorEvent) => {
 	console.error('>>> WebSocket error occurred (main.ts):', errorEvent);
@@ -161,14 +183,9 @@ eventBus.subscribe('websocket:error', (errorEvent) => {
 router.start();
 
 globalThis.addEventListener('load', () => {
-	console.log('Window loaded.');
-	if (!savedLogin) {
-		console.log(
-			'No saved credentials, running initial navigation check on load.',
-		);
-		isInitialAuthCheckComplete = true;
-		runInitialNavigationIfReady();
-	}
+	console.log(
+		'Window loaded. Waiting for WebSocket connection or auth result...',
+	);
 });
 
 wsService.connect();

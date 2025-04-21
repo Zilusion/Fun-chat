@@ -1,4 +1,3 @@
-// src/types/events.ts
 import type { ConnectionStatus } from '../services/web-socket-service';
 import type {
 	UserInfo,
@@ -59,8 +58,6 @@ export type EventPayloadMap = {
 	'ui:logoutRequest': void;
 	'ui:selectChat': { userId: string };
 	'ui:clearChatSelection': void;
-
-	'chat:markedAsRead': { userId: string };
 };
 
 export type AppEventType = keyof EventPayloadMap;

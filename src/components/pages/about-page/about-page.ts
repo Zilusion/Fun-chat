@@ -6,13 +6,14 @@ import classes from './_about-page.module.scss';
 export class AboutPage extends BaseComponent {
 	private container: HTMLElement | null = null;
 	private title: HTMLHeadingElement | null = null;
+	private text: HTMLElement | null = null;
 	private creator: HTMLElement | null = null;
 	private goBackButton: HTMLButtonElement | null = null;
 
 	constructor() {
 		super({
 			tag: 'main',
-			classes: classes['about-page'],
+			classes: classes['page'],
 		});
 		this.render();
 		this.addEventListeners();
@@ -28,11 +29,20 @@ export class AboutPage extends BaseComponent {
 
 		this.title = ElementCreator.create({
 			tag: 'h1',
+			classes: classes['title'],
 			content: 'Fun chat',
 		}) as HTMLHeadingElement;
 
+		this.text = ElementCreator.create({
+			tag: 'p',
+			classes: classes['text'],
+			content:
+				'Fun chat is a small application for communication. It was created as part of the RS School training course. Thank you for visiting this page! Wish you good luck in all your endeavors!',
+		}) as HTMLElement;
+
 		this.creator = ElementCreator.create({
 			tag: 'a',
+			classes: classes['creator'],
 			content: 'Created by Zilusion',
 			attributes: {
 				href: 'https://github.com/Zilusion',
@@ -47,7 +57,12 @@ export class AboutPage extends BaseComponent {
 			attributes: { type: 'button' },
 		}) as HTMLButtonElement;
 
-		this.container.append(this.title, this.creator, this.goBackButton);
+		this.container.append(
+			this.title,
+			this.text,
+			this.creator,
+			this.goBackButton,
+		);
 	}
 
 	private addEventListeners(): void {

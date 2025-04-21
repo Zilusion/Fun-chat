@@ -20,9 +20,8 @@ export class AuthService {
 			const userInfo = result.user;
 			console.log(`AuthService: Login successful for ${userInfo.login}`);
 			try {
-				// Сохраняем в sessionStorage (очищается при закрытии вкладки/браузера)
-				sessionStorage.setItem('chatUserLogin', login); // Сохраняем логин
-				sessionStorage.setItem('chatUserPassword', password); // Сохраняем пароль (!!!)
+				sessionStorage.setItem('chatUserLogin', login);
+				sessionStorage.setItem('chatUserPassword', password);
 				console.log(
 					'AuthService: Credentials saved to sessionStorage.',
 				);
@@ -31,15 +30,12 @@ export class AuthService {
 					'AuthService: Failed to save credentials to sessionStorage:',
 					storageError,
 				);
-				// Ошибка sessionStorage не должна прерывать логин
 			}
 			this.fetchAndPublishUsers().catch((error) => {
 				console.error(
 					'AuthService: Failed to fetch users after login:',
 					error,
 				);
-				// Опционально: опубликовать событие ошибки загрузки пользователей
-				// this.eventBus.publish('data:userListFailed', err);
 			});
 			this.eventBus.publish('auth:loginSuccess', userInfo);
 			return userInfo;
@@ -129,9 +125,5 @@ export class AuthService {
 	public async refreshDataAfterReconnect(): Promise<void> {
 		console.log('AuthService: Refreshing data after reconnect...');
 		await this.fetchAndPublishUsers();
-		// TODO: Позже сюда можно добавить логику запроса непрочитанных сообщений
-		// или обновления истории текущего чата, если он был выбран.
-		// Для этого может понадобиться MessageService.
-		// await messageService.fetchUnreadCounts(); // Пример
 	}
 }

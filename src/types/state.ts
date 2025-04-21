@@ -1,4 +1,3 @@
-// src/types/state.ts
 import type { ConnectionStatus } from '../services/web-socket-service';
 import type { UserInfo, MessageData } from './api-types';
 

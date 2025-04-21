@@ -1,4 +1,3 @@
-// src/components/login-page/login-page.ts
 import type { AuthService } from '../../../services/auth-service';
 import type { EventBus } from '../../../services/event-bus';
 

@@ -104,8 +104,6 @@ function isMessageDataBase(
 		data !== null &&
 		'id' in data &&
 		typeof data.id === 'string' &&
-		// 'from' in data && typeof data.from === 'string' && // Не во всех ответах есть
-		// 'to' in data && typeof data.to === 'string' &&     // Не во всех ответах есть
 		'text' in data &&
 		typeof data.text === 'string' &&
 		'datetime' in data &&

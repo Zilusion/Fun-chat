@@ -1,4 +1,3 @@
-// src/components/chat-area/chat-message-component.ts
 import type { MessageData } from '../../types/api-types';
 import type { StateService } from '../../services/state-service';
 import ElementCreator from '../../utils/element-creator';
@@ -208,9 +207,8 @@ export class ChatMessageComponent extends BaseComponent<HTMLDivElement> {
 	private handleEditClick = (): void => {
 		this.onEditCallback(this.messageData.id, this.messageData.text);
 	};
+
 	private handleDeleteClick = (): void => {
-		if (confirm('Are you sure you want to delete this message?')) {
-			this.onDeleteCallback(this.messageData.id);
-		}
+		this.onDeleteCallback(this.messageData.id);
 	};
 }

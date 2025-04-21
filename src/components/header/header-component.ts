@@ -1,4 +1,3 @@
-// src/components/header/header-component.ts
 import type { EventBus } from '../../services/event-bus';
 import type { StateService } from '../../services/state-service';
 import ElementCreator from '../../utils/element-creator';
@@ -45,7 +44,6 @@ export class HeaderComponent extends BaseComponent {
 	}
 
 	protected render(): void {
-		console.log('HeaderComponent rendering static structure...');
 		this.container = ElementCreator.create({
 			tag: 'div',
 			classes: ['container', classes['container']],
@@ -95,9 +93,6 @@ export class HeaderComponent extends BaseComponent {
 	private updateCurrentUserDisplay(): void {
 		if (this.currentUserElement) {
 			const userName = this.stateService.getCurrentUser()?.login ?? '...';
-			console.log(
-				`HeaderComponent updating user display to: ${userName}`,
-			);
 			this.currentUserElement.textContent = `User: ${userName}`;
 		} else {
 			console.warn(

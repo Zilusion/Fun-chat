@@ -1,17 +1,15 @@
-import type { AuthService } from '../../../services/auth-service';
 import type { EventBus } from '../../../services/event-bus';
 import type { MessageService } from '../../../services/message-service';
 import type { StateService } from '../../../services/state-service';
-// import ElementCreator from '../../../utils/element-creator';
 import { BaseComponent } from '../../base/component';
 import { ChatAreaComponent } from '../../chat-area/chat-area-component';
 import { ContactsComponent } from '../../contacts/contacts-component';
+import { FooterComponent } from '../../footer/footer-component';
 import { HeaderComponent } from '../../header/header-component';
 
 import classes from './_main-page.module.scss';
 
 export class MainPage extends BaseComponent {
-	private readonly authService: AuthService;
 	private readonly eventBus: EventBus;
 	private readonly stateService: StateService;
 	private readonly messageService: MessageService;
@@ -19,9 +17,9 @@ export class MainPage extends BaseComponent {
 	private header: HeaderComponent | null = null;
 	private contacts: ContactsComponent | null = null;
 	private chatArea: ChatAreaComponent | null = null;
+	private footer: FooterComponent | null = null;
 
 	constructor(
-		authService: AuthService,
 		eventBus: EventBus,
 		stateService: StateService,
 		messageService: MessageService,
@@ -31,7 +29,6 @@ export class MainPage extends BaseComponent {
 			classes: classes['page'],
 		});
 
-		this.authService = authService;
 		this.eventBus = eventBus;
 		this.stateService = stateService;
 		this.messageService = messageService;
@@ -51,15 +48,15 @@ export class MainPage extends BaseComponent {
 			this.messageService,
 		);
 		this.chatArea.addClass(classes['chat-area']);
+
+		this.footer = new FooterComponent();
+		this.footer.addClass(classes['footer']);
+
 		this.element.append(
 			this.header.getElement(),
 			this.contacts.getElement(),
 			this.chatArea.getElement(),
+			this.footer.getElement(),
 		);
-		// this.container = ElementCreator.create({
-		// 	tag: 'div',
-		// 	classes: ['container', classes['login-page-container']],
-		// }) as HTMLElement;
-		// this.element.append(this.container);
 	}
 }

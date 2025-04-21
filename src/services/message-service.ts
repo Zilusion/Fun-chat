@@ -1,5 +1,4 @@
 import type { WebSocketService } from './web-socket-service';
-// Импортируем нужные типы из API для payload'ов запросов и ответов
 import type {
 	MessageData,
 	MessageDeleteResponsePayload,
@@ -10,31 +9,19 @@ import type {
 } from '../types/api-types';
 import type { EventBus } from './event-bus';
 
-/**
- * Сервис для инкапсуляции логики взаимодействия с API сообщений чата.
- */
 export class MessageService {
 	private readonly wsService: WebSocketService;
 	private readonly eventBus: EventBus;
-	// EventBus пока не нужен, если сервис только отправляет запросы и возвращает результат
 
 	constructor(wsService: WebSocketService, eventBus: EventBus) {
 		this.wsService = wsService;
 		this.eventBus = eventBus;
 	}
 
-	/**
-	 * Отправляет текстовое сообщение указанному пользователю.
-	 * @param recipientLogin - Логин получателя.
-	 * @param messageText - Текст сообщения.
-	 * @returns Promise, который разрешится с данными отправленного сообщения (включая ID, время и т.д.).
-	 * @throws Ошибка, если отправка не удалась (ошибка сети, API или валидации сервера).
-	 */
 	public async sendMessage(
 		recipientLogin: string,
 		messageText: string,
 	): Promise<MessageData> {
-		// Проверка на пустой текст может быть здесь или в UI
 		if (!messageText.trim()) {
 			throw new Error('Cannot send an empty message.');
 		}
@@ -43,21 +30,17 @@ export class MessageService {
 			console.log(
 				`MessageService: Sending message to ${recipientLogin}...`,
 			);
-			// Вызываем wsService.send с типом 'MSG_SEND'.
-			// TypeScript автоматически выведет типы payload запроса и ответа
-			// благодаря RequestPayloadMap и ResponsePayloadMap.
 			const responsePayload: MessageSendResponsePayload =
 				await this.wsService.send('MSG_SEND', {
 					message: {
 						to: recipientLogin,
-						text: messageText.trim(), // Убираем лишние пробелы
+						text: messageText.trim(),
 					},
 				});
 			const sentMessageData = responsePayload.message;
 			console.log(
 				`MessageService: Message sent successfully (ID: ${responsePayload.message.id})`,
 			);
-			// Возвращаем объект сообщения из payload ответа
 			this.eventBus.publish('message:sentSuccessfully', sentMessageData);
 			return responsePayload.message;
 		} catch (error) {
@@ -65,17 +48,10 @@ export class MessageService {
 				`MessageService: Failed to send message to ${recipientLogin}:`,
 				error,
 			);
-			// Пробрасываем ошибку дальше, чтобы ее можно было обработать в вызывающем коде (UI)
 			throw error;
 		}
 	}
 
-	/**
-	 * Запрашивает историю сообщений с указанным пользователем.
-	 * @param userId - Логин пользователя, с которым запрашивается история.
-	 * @returns Promise, который разрешится с массивом сообщений (MessageData[]), отсортированным по времени.
-	 * @throws Ошибка, если запрос не удался.
-	 */
 	public async fetchMessages(userId: string): Promise<MessageData[]> {
 		try {
 			console.log(
@@ -88,7 +64,6 @@ export class MessageService {
 			console.log(
 				`MessageService: Message history with ${userId} fetched (${responsePayload.messages.length} messages).`,
 			);
-			// Сервер обещает отсортированный массив
 			return responsePayload.messages;
 		} catch (error) {
 			console.error(
@@ -99,23 +74,14 @@ export class MessageService {
 		}
 	}
 
-	/**
-	 * Отправляет запрос на пометку сообщения как прочитанного.
-	 * Вызывается, когда пользователь открывает чат или прокручивает к непрочитанным.
-	 * @param messageId - ID сообщения, которое помечается как прочитанное.
-	 * @returns Promise, который разрешится с payload'ом ответа сервера (содержащим статус isReaded).
-	 * @throws Ошибка, если запрос не удался.
-	 */
 	public async markMessageAsRead(
 		messageId: string,
 	): Promise<MessageReadResponsePayload> {
 		try {
-			// console.log(`MessageService: Marking message ${messageId} as read...`); // Можно логировать меньше
 			const responsePayload: MessageReadResponsePayload =
 				await this.wsService.send('MSG_READ', {
 					message: { id: messageId },
 				});
-			// console.log(`MessageService: Message ${messageId} marked as read.`);
 			return responsePayload;
 		} catch (error) {
 			console.error(
@@ -126,12 +92,6 @@ export class MessageService {
 		}
 	}
 
-	/**
-	 * Отправляет запрос на удаление сообщения (только для своих сообщений).
-	 * @param messageId - ID сообщения для удаления.
-	 * @returns Promise, который разрешится с payload'ом ответа сервера (содержащим статус isDeleted).
-	 * @throws Ошибка, если запрос не удался (например, не автор сообщения).
-	 */
 	public async deleteMessage(
 		messageId: string,
 	): Promise<MessageDeleteResponsePayload> {
@@ -156,13 +116,6 @@ export class MessageService {
 		}
 	}
 
-	/**
-	 * Отправляет запрос на редактирование текста сообщения (только для своих сообщений).
-	 * @param messageId - ID сообщения для редактирования.
-	 * @param newText - Новый текст сообщения.
-	 * @returns Promise, который разрешится с payload'ом ответа сервера (содержащим новый текст и статус isEdited).
-	 * @throws Ошибка, если запрос не удался.
-	 */
 	public async editMessage(
 		messageId: string,
 		newText: string,

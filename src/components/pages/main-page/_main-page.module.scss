@@ -1,11 +1,30 @@
+@use '../../../styles/base/mixins' as mixins;
+
 .page {
 	display: grid;
 	grid-template:
 		'header header' auto
 		'contacts chat' 1fr
 		'footer footer' auto /
-		200px 1fr;
+		400px 1fr;
 	height: 100%;
+
+	@include mixins.media-lg {
+		grid-template:
+			'header header' auto
+			'contacts chat' 1fr
+			'footer footer' auto /
+			150px 1fr;
+	}
+
+	@include mixins.media-sm {
+		grid-template:
+			'header' auto
+			'contacts' 200px
+			'chat' 1fr
+			'footer' auto /
+			1fr;
+	}
 }
 
 .header {
