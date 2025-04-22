@@ -269,6 +269,8 @@ export class LoginPage extends BaseComponent {
 			else if (!value) message = 'Username must not be empty.';
 			else if (value.length < 3)
 				message = 'Username must contain at least 3 characters.';
+			else if (value.length > 20)
+				message = 'Username must not contain more than 20 characters.';
 			else if (/^[\dA-Za-z]+$/.test(value)) {
 				isValid = true;
 			} else {
@@ -282,8 +284,14 @@ export class LoginPage extends BaseComponent {
 			else if (!value) message = 'Password must not be empty.';
 			else if (value.length < 6)
 				message = 'Password must contain at least 6 characters.';
-			else if (!/(?=.*\d)(?=.*[A-Za-z])/.test(value))
-				message = 'Password must contain both numbers and letters.';
+			else if (!/[a-z]/.test(value))
+				message =
+					'Password must contain at least one lowercase letter.';
+			else if (!/[A-Z]/.test(value))
+				message =
+					'Password must contain at least one uppercase letter.';
+			else if (!/\d/.test(value))
+				message = 'Password must contain at least one number.';
 			else if (value === usernameValue && usernameValue.length > 0)
 				message = 'Password must not match username.';
 			else isValid = true;
