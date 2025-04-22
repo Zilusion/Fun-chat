@@ -44,7 +44,7 @@ export class FooterComponent extends BaseComponent {
 					tag: 'use',
 					namespace: 'http://www.w3.org/2000/svg',
 					attributes: {
-						'xlink:href': '/icon-sprite.svg#rss',
+						'xlink:href': './icon-sprite.svg#rss',
 					},
 				},
 			],
