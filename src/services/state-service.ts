@@ -3,16 +3,13 @@ import type { ConnectionStatus } from './web-socket-service';
 import type { AppState } from '../types/state';
 import { getInitialAppState } from '../types/state';
 import type { UserInfo, MessageData } from '../types/api-types';
-import type { MessageService } from './message-service';
 
 export class StateService {
 	private readonly eventBus: EventBus;
 	private state: AppState = getInitialAppState();
-	private messageService: MessageService;
 
-	constructor(eventBus: EventBus, messageService: MessageService) {
+	constructor(eventBus: EventBus) {
 		this.eventBus = eventBus;
-		this.messageService = messageService;
 		this.subscribeToEvents();
 	}
 
@@ -69,6 +66,7 @@ export class StateService {
 
 	public resetUnreadCount(userId: string): void {
 		if (this.state.unreadCounts.has(userId)) {
+			console.log(`StateService: Resetting unread count for ${userId}`);
 			this.state.unreadCounts.delete(userId);
 			this.publishStateChange();
 			this.eventBus.publish(
@@ -259,38 +257,18 @@ export class StateService {
 				);
 				messageNeedsUpdate = true;
 			} else {
-				this.state.currentChatMessages[existingIndex] = message;
-				messageNeedsUpdate = true;
-				console.warn(
-					`StateService: Message ${message.id} already exists. Updating.`,
-				);
-			}
-
-			if (!isOutgoing) {
-				const currentMessageInState =
-					this.state.currentChatMessages.find(
-						(m) => m.id === message.id,
-					);
+				const existingMessage =
+					this.state.currentChatMessages[existingIndex];
 				if (
-					currentMessageInState &&
-					!currentMessageInState.status.isReaded
+					JSON.stringify(existingMessage.status) !==
+						JSON.stringify(message.status) ||
+					existingMessage.text !== message.text
 				) {
-					console.log(
-						`StateService: Incoming message ${message.id} for active chat. Optimistically marking as read and sending MSG_READ.`,
-					);
-					currentMessageInState.status.isReaded = true;
+					this.state.currentChatMessages[existingIndex] = message;
 					messageNeedsUpdate = true;
-
-					void this.messageService
-						.markMessageAsRead(message.id)
-						.catch((error) =>
-							console.error(
-								`StateService: Failed to send MSG_READ for ${message.id}`,
-								error,
-							),
-						);
-
-					this.resetUnreadCount(chatPartnerLogin);
+					console.warn(
+						`StateService: Message ${message.id} already exists. Updating status/text.`,
+					);
 				}
 			}
 

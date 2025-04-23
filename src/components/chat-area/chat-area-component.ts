@@ -195,16 +195,41 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 						"ChatArea: Received 'state:currentMessagesUpdated'",
 					);
 					const wasScrolledToBottom = this.isScrolledToBottom();
-					const isNewIncomingAdded =
-						newMessages.length > this.messages.length &&
-						newMessages.at(-1)?.from ===
-							this.currentChatPartner.login;
+					const previousMessageCount = this.messages.length;
+					const isNewMessageAdded =
+						newMessages.length > previousMessageCount;
+					const lastMessage = newMessages.at(-1);
+					const currentUserLogin =
+						this.stateService.getCurrentUser()?.login;
+					const isLastMessageIncoming =
+						lastMessage && lastMessage.from !== currentUserLogin;
 
 					this.messages = newMessages;
 					this.renderMessages(
 						wasScrolledToBottom,
-						isNewIncomingAdded,
+						isLastMessageIncoming && isNewMessageAdded,
 					);
+
+					if (
+						isNewMessageAdded &&
+						isLastMessageIncoming &&
+						!this.shouldShowUnreadDivider
+					) {
+						console.log(
+							`ChatArea: New incoming message ${lastMessage.id} in active/read chat. Marking as read.`,
+						);
+						void this.messageService
+							.markMessageAsRead(lastMessage.id)
+							.catch((error) =>
+								console.error(
+									`ChatArea: Failed to send MSG_READ for ${lastMessage.id}`,
+									error,
+								),
+							);
+						this.stateService.resetUnreadCount(
+							this.currentChatPartner.login,
+						);
+					}
 				}
 			},
 		);
@@ -272,7 +297,6 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		this.unreadDividerElement?.remove();
 		this.unreadDividerElement = null;
 		this.shouldShowUnreadDivider = true;
-		this.ignoreNextScrollEvent = false;
 
 		if (userId) {
 			const user = this.stateService.getUser(userId);
@@ -420,6 +444,9 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		);
 
 		const currentScrollTop = this.messageListElement.scrollTop;
+		const currentScrollHeight = this.messageListElement.scrollHeight;
+
+		this.determineFirstUnread();
 
 		const newMessageIds = new Set(this.messages.map((m) => m.id));
 		this.messageComponents.forEach((component, messageId) => {
@@ -430,9 +457,9 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			}
 		});
 
-		this.determineFirstUnread();
-
 		let dividerNeedsInsert = false;
+		let dividerWasAlreadyPresent = Boolean(this.unreadDividerElement);
+
 		if (this.firstUnreadMessageId && !this.unreadDividerElement) {
 			this.unreadDividerElement = this.createUnreadDividerElement();
 			dividerNeedsInsert = true;
@@ -441,24 +468,30 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			this.unreadDividerElement.remove();
 			this.unreadDividerElement = null;
 			console.log('ChatArea: Unread divider element removed.');
+			dividerWasAlreadyPresent = false;
 		}
 
 		const elementsToAppend: HTMLElement[] = [];
-		let dividerInserted = false;
-		if (this.unreadDividerElement && !dividerNeedsInsert) {
+		let dividerInsertedInLoop = false;
+
+		if (
+			this.unreadDividerElement &&
+			this.messages[0]?.id === this.firstUnreadMessageId
+		) {
 			elementsToAppend.push(this.unreadDividerElement);
-			dividerInserted = true;
+			dividerInsertedInLoop = true;
 		}
 
 		this.messages.forEach((message) => {
 			if (
 				this.unreadDividerElement &&
 				message.id === this.firstUnreadMessageId &&
-				!dividerInserted
+				!dividerInsertedInLoop
 			) {
 				elementsToAppend.push(this.unreadDividerElement);
-				dividerInserted = true;
+				dividerInsertedInLoop = true;
 			}
+
 			const existingComponent = this.messageComponents.get(message.id);
 			if (existingComponent) {
 				existingComponent.updateMessage(message);
@@ -474,15 +507,25 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 				elementsToAppend.push(messageComponent.getElement());
 			}
 		});
-		this.messageListElement.replaceChildren(...elementsToAppend);
 
-		if (this.firstUnreadMessageId && dividerInserted) {
-			this.unreadDividerElement = this.messageListElement.querySelector(
-				`.${classes['new-messages-divider']}`,
-			);
+		if (
+			this.unreadDividerElement &&
+			!dividerInsertedInLoop &&
+			!elementsToAppend.includes(this.unreadDividerElement)
+		) {
+			elementsToAppend.unshift(this.unreadDividerElement);
+			dividerInsertedInLoop = true;
 		}
 
-		if (this.messages.length > 0) {
+		this.messageListElement.replaceChildren(...elementsToAppend);
+
+		this.unreadDividerElement = this.firstUnreadMessageId
+			? this.messageListElement.querySelector(
+					`.${classes['new-messages-divider']}`,
+				)
+			: null;
+
+		if (this.messages.length > 0 || this.unreadDividerElement) {
 			this.hidePlaceholder();
 		} else if (this.currentChatPartner && !this.isLoading) {
 			this.showPlaceholder(
@@ -492,36 +535,55 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			this.showPlaceholder('Select a chat to start messaging');
 		}
 
-		if (this.messages.length > 0) {
-			const dividerJustAppeared =
-				this.firstUnreadMessageId &&
-				this.unreadDividerElement &&
-				dividerInserted;
+		if (this.messages.length > 0 || this.unreadDividerElement) {
+			const dividerJustAppeared = dividerNeedsInsert;
 
 			if (dividerJustAppeared) {
 				console.log(
-					'ChatArea: Divider appeared, setting ignoreNextScrollEvent flag and scrolling.',
+					'ChatArea: Divider appeared, scrolling to divider.',
 				);
-				this.ignoreNextScrollEvent = true;
-				this.scrollOnOpen();
-				setTimeout(() => {
-					this.ignoreNextScrollEvent = false;
-				}, 100);
+				this.setIgnoreScrollAndScroll(this.scrollOnOpen.bind(this));
 			} else if (isNewIncomingAdded) {
-				console.log(
-					'ChatArea: Scrolling down for new incoming message.',
-				);
-				this.scrollToBottom('smooth');
+				if (dividerWasAlreadyPresent && this.unreadDividerElement) {
+					console.log(
+						'ChatArea: New incoming message, divider present. No scroll.',
+					);
+				} else {
+					console.log(
+						'ChatArea: New incoming message, no divider. Scrolling down.',
+					);
+					this.setIgnoreScrollAndScroll(() =>
+						this.scrollToBottom('smooth'),
+					);
+				}
 			} else if (wasScrolledToBottom) {
 				console.log('ChatArea: Staying at bottom (auto scroll).');
-				this.scrollToBottom('auto');
+				this.setIgnoreScrollAndScroll(() =>
+					this.scrollToBottom('auto'),
+				);
 			} else {
 				console.log(
 					`ChatArea: Restoring scroll to ${currentScrollTop}`,
 				);
-				this.messageListElement.scrollTop = currentScrollTop;
+				const newScrollHeight = this.messageListElement.scrollHeight;
+				this.messageListElement.scrollTop =
+					currentScrollTop + (newScrollHeight - currentScrollHeight);
 			}
 		}
+	}
+
+	private setIgnoreScrollAndScroll(scrollFunction: () => void): void {
+		this.ignoreNextScrollEvent = true;
+		console.log('ChatArea: Setting ignoreNextScrollEvent = true');
+		scrollFunction();
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				this.ignoreNextScrollEvent = false;
+				console.log(
+					'ChatArea: Re-enabled scroll event handling (ignoreNextScrollEvent = false).',
+				);
+			});
+		});
 	}
 
 	private startEditMessage = (
@@ -630,11 +692,10 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 
 	private determineFirstUnread(): void {
 		if (this.shouldShowUnreadDivider) {
-			const currentUserLogin = this.stateService.getCurrentUser()?.login;
 			this.firstUnreadMessageId =
 				this.messages.find(
 					(message) =>
-						message.from !== currentUserLogin &&
+						message.from === this.currentChatPartner?.login &&
 						!message.status.isReaded,
 				)?.id ?? null;
 			console.log(
@@ -687,19 +748,31 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 	}
 
 	private removeUnreadDivider(): void {
-		if (this.unreadDividerElement && this.shouldShowUnreadDivider) {
-			console.log(
-				'ChatArea: Removing unread divider due to interaction AND marking as read.',
-			);
-			this.unreadDividerElement.remove();
-			this.unreadDividerElement = null;
-			this.shouldShowUnreadDivider = false;
-			this.markVisibleMessagesAsRead();
-		} else if (this.unreadDividerElement) {
+		if (!this.unreadDividerElement && !this.shouldShowUnreadDivider) {
+			return;
+		}
+
+		const shouldMarkAsRead =
+			this.unreadDividerElement && this.shouldShowUnreadDivider;
+
+		if (this.unreadDividerElement) {
 			this.unreadDividerElement.remove();
 			this.unreadDividerElement = null;
 		}
+
+		this.shouldShowUnreadDivider = false;
 		this.firstUnreadMessageId = null;
+
+		if (shouldMarkAsRead) {
+			console.log(
+				'ChatArea: Removing unread divider due to interaction AND triggering mark as read.',
+			);
+			this.markVisibleMessagesAsRead();
+		} else {
+			console.log(
+				'ChatArea: Removing unread divider (if existed) without marking as read.',
+			);
+		}
 	}
 
 	private scrollOnOpen(): void {
@@ -708,7 +781,7 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			if (this.unreadDividerElement) {
 				const dividerTop = this.unreadDividerElement.offsetTop;
 				const listHeight = this.messageListElement.clientHeight;
-				const scrollTo = Math.max(0, dividerTop - listHeight / 5);
+				const scrollTo = Math.max(0, dividerTop - listHeight / 3);
 				this.messageListElement.scrollTo({
 					top: scrollTo,
 					behavior: 'auto',
@@ -721,10 +794,11 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 	private handleScroll = (): void => {
 		if (this.ignoreNextScrollEvent) {
 			console.log(
-				'ChatArea: Ignoring first scroll event after programmatic scroll.',
+				'ChatArea: Ignoring scroll event (likely programmatic).',
 			);
 			return;
 		}
+		console.log('ChatArea: User scroll detected, removing divider.');
 		this.removeUnreadDivider();
 	};
 	private handleMessagesClick(): void {
@@ -732,8 +806,12 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 	}
 	private handleSendClick = (): void => {
 		this.removeUnreadDivider();
+		if (!this.unreadDividerElement) {
+			this.markVisibleMessagesAsRead();
+		}
 		this.submitInput();
 	};
+
 	private handleInputKeyDown = (event: KeyboardEvent): void => {
 		if (event.key === 'Escape' && this.editingMessageId) {
 			console.log('ChatArea: Cancelling edit with Escape key.');
@@ -743,13 +821,18 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 			this.removeUnreadDivider();
+			if (!this.unreadDividerElement) {
+				this.markVisibleMessagesAsRead();
+			}
 			this.submitInput();
 		}
 	};
 
 	private markVisibleMessagesAsRead(): void {
 		if (!this.currentChatPartner) return;
-		console.log('ChatArea: Triggering mark as read action...');
+		console.log(
+			'ChatArea: Triggering mark as read action upon interaction.',
+		);
 
 		const currentUserLogin = this.stateService.getCurrentUser()?.login;
 		if (!currentUserLogin) return;
@@ -764,10 +847,11 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 
 		if (unreadIncomingMessageIds.length > 0) {
 			console.log(
-				`ChatArea: Marking ${unreadIncomingMessageIds.length} messages as read: [${unreadIncomingMessageIds.join(', ')}]`,
+				`ChatArea: Found ${unreadIncomingMessageIds.length} unread messages to mark: [${unreadIncomingMessageIds.join(', ')}]`,
 			);
 			this.stateService.resetUnreadCount(this.currentChatPartner.login);
 			unreadIncomingMessageIds.forEach((id) => {
+				console.log(`ChatArea: Sending MSG_READ for ${id}`);
 				void this.messageService
 					.markMessageAsRead(id)
 					.catch((error) =>
@@ -787,6 +871,7 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			this.unreadDividerElement.remove();
 			this.unreadDividerElement = null;
 		}
+		this.shouldShowUnreadDivider = false;
 	}
 
 	private sendMessage(): void {

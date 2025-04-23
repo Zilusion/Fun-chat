@@ -29,6 +29,7 @@
 .school-link,
 .creator {
 	border-bottom: 2px solid transparent;
+	color: var(--color-primary);
 	transition: var(--transition);
 
 	&:hover {

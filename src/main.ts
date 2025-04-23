@@ -17,7 +17,7 @@ const eventBus = new EventBus();
 const wsService = new WebSocketService(SERVER_URL, eventBus);
 const authService = new AuthService(wsService, eventBus);
 const messageService = new MessageService(wsService, eventBus);
-const stateService = new StateService(eventBus, messageService);
+const stateService = new StateService(eventBus);
 
 let savedLogin: string | null = null;
 let savedPassword: string | null = null;
