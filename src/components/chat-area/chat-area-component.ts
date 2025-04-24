@@ -297,6 +297,7 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		this.unreadDividerElement?.remove();
 		this.unreadDividerElement = null;
 		this.shouldShowUnreadDivider = true;
+		this.ignoreNextScrollEvent = false;
 
 		if (userId) {
 			const user = this.stateService.getUser(userId);
@@ -692,6 +693,7 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 
 	private determineFirstUnread(): void {
 		if (this.shouldShowUnreadDivider) {
+			// const currentUserLogin = this.stateService.getCurrentUser()?.login;
 			this.firstUnreadMessageId =
 				this.messages.find(
 					(message) =>
@@ -706,7 +708,6 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			this.firstUnreadMessageId = null;
 		}
 	}
-
 	private requestDeleteMessage = (messageId: string): void => {
 		console.log(`ChatArea: Delete requested for message ${messageId}`);
 		const confirmModal = new ConfirmModalComponent({
@@ -747,32 +748,64 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		}) as HTMLElement;
 	}
 
+	// private removeUnreadDivider(): void {
+	// 	if (!this.unreadDividerElement && !this.shouldShowUnreadDivider) {
+	// 		return;
+	// 	}
+
+	// 	const shouldMarkAsRead =
+	// 		this.unreadDividerElement && this.shouldShowUnreadDivider;
+
+	// 	if (this.unreadDividerElement) {
+	// 		this.unreadDividerElement.remove();
+	// 		this.unreadDividerElement = null;
+	// 	}
+
+	// 	this.shouldShowUnreadDivider = false;
+	// 	this.firstUnreadMessageId = null;
+
+	// 	if (shouldMarkAsRead) {
+	// 		console.log(
+	// 			'ChatArea: Removing unread divider due to interaction AND triggering mark as read.',
+	// 		);
+	// 		this.markVisibleMessagesAsRead();
+	// 	} else {
+	// 		console.log(
+	// 			'ChatArea: Removing unread divider (if existed) without marking as read.',
+	// 		);
+	// 	}
+	// }
 	private removeUnreadDivider(): void {
-		if (!this.unreadDividerElement && !this.shouldShowUnreadDivider) {
-			return;
-		}
+		// Проверяем, нужно ли вообще что-то делать:
+		// Есть ли элемент И разрешено ли его показывать (т.е. пользователь еще не взаимодействовал)
+		if (this.unreadDividerElement && this.shouldShowUnreadDivider) {
+			console.log(
+				'ChatArea: Removing unread divider due to interaction AND marking as read.',
+			);
+			// 1. Запоминаем, что нужно пометить как прочитанные
+			const needsMarkingRead = true;
+			// 2. Удаляем элемент из DOM
+			this.unreadDividerElement.remove();
+			// 3. Сбрасываем ссылки и флаги показа
+			this.unreadDividerElement = null;
+			this.shouldShowUnreadDivider = false; // <-- Запрещаем показ до СЛЕДУЮЩЕЙ СМЕНЫ чата
+			this.firstUnreadMessageId = null;
 
-		const shouldMarkAsRead =
-			this.unreadDividerElement && this.shouldShowUnreadDivider;
-
-		if (this.unreadDividerElement) {
+			// 4. Вызываем пометку прочитанными, если это было необходимо
+			if (needsMarkingRead) {
+				this.markVisibleMessagesAsRead();
+			}
+		} else if (this.unreadDividerElement) {
+			// Если элемент есть, но shouldShowUnreadDivider уже false - просто убираем элемент
+			// (На случай, если renderMessages не успел его убрать)
+			console.log(
+				'ChatArea: Removing unread divider (was already marked as read implicitly).',
+			);
 			this.unreadDividerElement.remove();
 			this.unreadDividerElement = null;
+			this.firstUnreadMessageId = null;
 		}
-
-		this.shouldShowUnreadDivider = false;
-		this.firstUnreadMessageId = null;
-
-		if (shouldMarkAsRead) {
-			console.log(
-				'ChatArea: Removing unread divider due to interaction AND triggering mark as read.',
-			);
-			this.markVisibleMessagesAsRead();
-		} else {
-			console.log(
-				'ChatArea: Removing unread divider (if existed) without marking as read.',
-			);
-		}
+		// Если элемента нет, ничего не делаем
 	}
 
 	private scrollOnOpen(): void {
@@ -866,12 +899,12 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 				'ChatArea: No unread incoming messages found to mark as read.',
 			);
 		}
-		this.firstUnreadMessageId = null;
-		if (this.unreadDividerElement) {
-			this.unreadDividerElement.remove();
-			this.unreadDividerElement = null;
-		}
-		this.shouldShowUnreadDivider = false;
+		// this.firstUnreadMessageId = null;
+		// if (this.unreadDividerElement) {
+		// 	this.unreadDividerElement.remove();
+		// 	this.unreadDividerElement = null;
+		// }
+		// this.shouldShowUnreadDivider = false;
 	}
 
 	private sendMessage(): void {
