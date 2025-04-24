@@ -1,3 +1,4 @@
+import type { MessageService } from './message-service';
 import type { EventBus } from './event-bus';
 import type { ConnectionStatus } from './web-socket-service';
 import type { AppState } from '../types/state';
@@ -7,9 +8,11 @@ import type { UserInfo, MessageData } from '../types/api-types';
 export class StateService {
 	private readonly eventBus: EventBus;
 	private state: AppState = getInitialAppState();
+	private messageService: MessageService;
 
-	constructor(eventBus: EventBus) {
+	constructor(eventBus: EventBus, messageService: MessageService) {
 		this.eventBus = eventBus;
+		this.messageService = messageService;
 		this.subscribeToEvents();
 	}
 
@@ -93,6 +96,51 @@ export class StateService {
 		this.eventBus.subscribe('websocket:status', (status) => {
 			this.setConnectionStatus(status);
 		});
+
+		this.eventBus.subscribe(
+			'data:initialUnreadCountsReceived',
+			(initialCounts) => {
+				console.log(
+					'StateService: Received initial unread counts:',
+					initialCounts,
+				);
+				if (this.state.currentUser) {
+					const newUnreadCounts = new Map([
+						...this.state.unreadCounts,
+						...initialCounts,
+					]);
+					const validUnreadCounts = new Map<string, number>();
+					newUnreadCounts.forEach((count, userId) => {
+						if (this.state.users.has(userId)) {
+							validUnreadCounts.set(userId, count);
+						}
+					});
+
+					if (
+						this.mapsAreEqual(
+							this.state.unreadCounts,
+							validUnreadCounts,
+						)
+					) {
+						console.log(
+							'StateService: Initial unread counts match current counts, no update needed.',
+						);
+						return;
+					}
+
+					this.state.unreadCounts = validUnreadCounts;
+					this.publishStateChange();
+					this.eventBus.publish(
+						'state:unreadCountsUpdated',
+						new Map(this.state.unreadCounts),
+					);
+				} else {
+					console.warn(
+						'StateService: Received initial unread counts, but user is no longer logged in.',
+					);
+				}
+			},
+		);
 
 		this.eventBus.subscribe('websocket:close', ({ wasClean }) => {
 			console.log('StateService: WebSocket closed.');
@@ -183,7 +231,6 @@ export class StateService {
 		this.eventBus.subscribe('ui:selectChat', ({ userId }) => {
 			this.setSelectedChatUserId(userId);
 			console.log('>>> Selected chat:', userId);
-			this.resetUnreadCount(userId);
 		});
 		this.eventBus.subscribe('ui:clearChatSelection', () => {
 			this.setSelectedChatUserId(null);
@@ -231,57 +278,238 @@ export class StateService {
 			this.publishStateChange();
 			this.eventBus.publish('state:selectedChatChanged', userId);
 			this.eventBus.publish('state:currentMessagesUpdated', []);
-			if (userId) {
-				this.resetUnreadCount(userId);
-			}
 		}
 	}
 
+	// src/services/state-service.ts
+
 	private handleNewMessage(message: MessageData): void {
 		const currentUserLogin = this.state.currentUser?.login;
-		if (!currentUserLogin) return;
+		if (!currentUserLogin) return; // Выходим, если текущий пользователь не определен
 
-		const isOutgoing = message.from === currentUserLogin;
-		const chatPartnerLogin = isOutgoing ? message.to : message.from;
+		const isOutgoing = message.from === currentUserLogin; // Определяем, исходящее ли сообщение
+		const chatPartnerLogin = isOutgoing ? message.to : message.from; // Определяем логин собеседника
 
+		// --- Обработка сообщения для АКТИВНОГО чата ---
 		if (this.state.selectedChatUserId === chatPartnerLogin) {
-			let messageNeedsUpdate = false;
-			const existingIndex = this.state.currentChatMessages.findIndex(
-				(m) => m.id === message.id,
+			console.log(
+				`StateService: Handling message ${message.id} for active chat with ${chatPartnerLogin}`,
 			);
 
+			// Определяем, считался ли чат "прочитанным" пользователем ДО прихода этого сообщения.
+			// Чат считается прочитанным, если для этого партнера НЕТ счетчика непрочитанных.
+			const chatWasAlreadyReadByAction =
+				!this.state.unreadCounts.has(chatPartnerLogin);
+
+			// Создаем копию сообщения, чтобы не мутировать оригинал напрямую до добавления в стейт
+			const messageCopy = { ...message, status: { ...message.status } };
+
+			// Флаг, нужно ли публиковать обновление state:currentMessagesUpdated
+			let messageNeedsUpdate = false;
+
+			// --- Логика пометки Read и Инкремента Счетчика для АКТИВНОГО чата ---
+			if (!isOutgoing) {
+				// Если сообщение ВХОДЯЩЕЕ
+				const chatPartner = this.state.users.get(chatPartnerLogin);
+				const isPartnerOnline = chatPartner?.isLogined ?? false;
+
+				// Проверяем, прочитано ли сообщение УЖЕ (например, пришло с isReaded:true от сервера)
+				if (messageCopy.status.isReaded) {
+					// Если сообщение пришло уже с isReaded: true, ничего не делаем со статусом/счетчиком
+					console.log(
+						`StateService: Incoming message ${messageCopy.id} is already marked as read.`,
+					);
+				} else {
+					// Сообщение еще не прочитано
+					if (isPartnerOnline && chatWasAlreadyReadByAction) {
+						// Сценарий 1: Собеседник онлайн И чат УЖЕ СЧИТАЛСЯ прочитанным -> Немедленно помечаем Read
+						console.log(
+							`StateService: Incoming message ${messageCopy.id} in active AND already read chat. Marking as read.`,
+						);
+						// 1. Оптимистично обновляем статус в КОПИИ сообщения
+						messageCopy.status.isReaded = true;
+						messageNeedsUpdate = true; // Точно нужно обновить UI
+						// 2. Отправляем MSG_READ на сервер
+						void this.messageService
+							.markMessageAsRead(messageCopy.id)
+							.catch((error) =>
+								console.error(
+									`StateService: Failed to send MSG_READ for ${messageCopy.id}`,
+									error,
+								),
+							);
+						// 3. Сбрасывать счетчик не нужно, его и так не было
+					} else {
+						// Сценарий 2: Чат ЕЩЕ НЕ прочитан пользователем ИЛИ собеседник оффлайн -> Увеличиваем счетчик
+						console.log(
+							`StateService: Incoming message ${messageCopy.id} in active BUT UNREAD chat. Incrementing count.`,
+						);
+						this.incrementUnreadCount(chatPartnerLogin); // <--- УВЕЛИЧИВАЕМ СЧЕТЧИК ЗДЕСЬ
+						// НЕ отправляем MSG_READ - ждем действия пользователя
+						// messageNeedsUpdate будет true при добавлении сообщения ниже
+					}
+				}
+			}
+			// --- Конец логики ---
+
+			// --- Добавляем/Обновляем сообщение в массиве ---
+			const existingIndex = this.state.currentChatMessages.findIndex(
+				(m) => m.id === messageCopy.id,
+			);
 			if (existingIndex === -1) {
-				this.state.currentChatMessages.push(message);
+				// Сообщения нет - добавляем (уже с возможно обновленным isReaded)
+				this.state.currentChatMessages.push(messageCopy);
 				this.state.currentChatMessages.sort(
 					(a, b) => a.datetime - b.datetime,
 				);
-				messageNeedsUpdate = true;
+				messageNeedsUpdate = true; // Новое сообщение - точно обновляем
+				console.log(
+					`StateService: Added new message ${messageCopy.id} to active chat.`,
+				);
 			} else {
+				// Сообщение есть - обновляем, если есть разница (включая наш возможный апдейт isReaded)
 				const existingMessage =
 					this.state.currentChatMessages[existingIndex];
 				if (
-					JSON.stringify(existingMessage.status) !==
-						JSON.stringify(message.status) ||
-					existingMessage.text !== message.text
+					JSON.stringify(existingMessage) !==
+					JSON.stringify(messageCopy)
 				) {
-					this.state.currentChatMessages[existingIndex] = message;
-					messageNeedsUpdate = true;
+					this.state.currentChatMessages[existingIndex] = messageCopy;
+					messageNeedsUpdate = true; // Обновили - нужно публиковать
 					console.warn(
-						`StateService: Message ${message.id} already exists. Updating status/text.`,
+						`StateService: Message ${messageCopy.id} already exists. Updating with new data.`,
 					);
 				}
 			}
+			// -----------------------------------------
 
+			// Публикуем обновление, если сообщение было добавлено или обновлено
 			if (messageNeedsUpdate) {
 				this.publishStateChange();
 				this.eventBus.publish('state:currentMessagesUpdated', [
 					...this.state.currentChatMessages,
 				]);
 			}
+
+			// --- Обработка сообщения для НЕактивного чата ---
 		} else if (!isOutgoing) {
-			this.incrementUnreadCount(chatPartnerLogin);
+			// Это входящее сообщение для чата, который сейчас НЕ выбран пользователем
+			const senderInfo = this.state.users.get(chatPartnerLogin);
+			// Увеличиваем счетчик непрочитанных, если отправитель онлайн
+			if (senderInfo?.isLogined) {
+				console.log(
+					`StateService: Incrementing unread count for online user ${chatPartnerLogin} (inactive chat)`,
+				);
+				this.incrementUnreadCount(chatPartnerLogin);
+			} else {
+				console.log(
+					`StateService: Incoming message from offline user ${chatPartnerLogin} (inactive chat). Not incrementing unread count.`,
+				);
+			}
 		}
 	}
+
+	// private handleNewMessage(message: MessageData): void {
+	// 	const currentUserLogin = this.state.currentUser?.login;
+	// 	if (!currentUserLogin) return;
+
+	// 	const isOutgoing = message.from === currentUserLogin;
+	// 	const chatPartnerLogin = isOutgoing ? message.to : message.from;
+
+	// 	// Обрабатываем сообщение, если оно для активного чата
+	// 	if (this.state.selectedChatUserId === chatPartnerLogin) {
+	// 		console.log(
+	// 			`StateService: Handling message ${message.id} for active chat with ${chatPartnerLogin}`,
+	// 		);
+
+	// 		// Определяем, считался ли чат "прочитанным" ДО прихода этого сообщения.
+	// 		// Чат считается прочитанным, если для этого партнера НЕТ счетчика непрочитанных.
+	// 		const chatWasAlreadyRead =
+	// 			!this.state.unreadCounts.has(chatPartnerLogin);
+
+	// 		// Создаем копию сообщения для возможной модификации
+	// 		const messageCopy = { ...message, status: { ...message.status } };
+
+	// 		// --- Логика немедленного прочтения ---
+	// 		// Помечаем прочитанным ТОЛЬКО если:
+	// 		// 1. Сообщение входящее
+	// 		// 2. Собеседник онлайн
+	// 		// 3. Сообщение еще не помечено как Read
+	// 		// 4. Чат УЖЕ СЧИТАЛСЯ прочитанным (нет счетчика в unreadCounts)
+	// 		const chatPartner = this.state.users.get(chatPartnerLogin);
+	// 		const isPartnerOnline = chatPartner?.isLogined ?? false;
+
+	// 		if (
+	// 			!isOutgoing &&
+	// 			isPartnerOnline &&
+	// 			chatWasAlreadyRead &&
+	// 			!messageCopy.status.isReaded
+	// 		) {
+	// 			console.log(
+	// 				`StateService: Incoming message ${messageCopy.id} in active AND already read chat. Marking as read.`,
+	// 			);
+	// 			// 1. Оптимистично обновляем статус в КОПИИ сообщения
+	// 			messageCopy.status.isReaded = true;
+	// 			// 2. Отправляем MSG_READ на сервер
+	// 			void this.messageService
+	// 				.markMessageAsRead(messageCopy.id)
+	// 				.catch((error) =>
+	// 					console.error(
+	// 						`StateService: Failed to send MSG_READ for ${messageCopy.id}`,
+	// 						error,
+	// 					),
+	// 				);
+	// 			// 3. Сбрасывать счетчик не нужно, его и так не было
+	// 		}
+	// 		// --- Конец логики немедленного прочтения ---
+
+	// 		// --- Добавляем/Обновляем сообщение в массиве ---
+	// 		let messageNeedsUpdate = false;
+	// 		const existingIndex = this.state.currentChatMessages.findIndex(
+	// 			(m) => m.id === messageCopy.id,
+	// 		);
+	// 		if (existingIndex === -1) {
+	// 			this.state.currentChatMessages.push(messageCopy); // Добавляем (возможно, уже с isReaded: true)
+	// 			this.state.currentChatMessages.sort(
+	// 				(a, b) => a.datetime - b.datetime,
+	// 			);
+	// 			messageNeedsUpdate = true;
+	// 			console.log(
+	// 				`StateService: Added new message ${messageCopy.id} to active chat.`,
+	// 			);
+	// 		} else {
+	// 			const existingMessage =
+	// 				this.state.currentChatMessages[existingIndex];
+	// 			if (
+	// 				JSON.stringify(existingMessage) !==
+	// 				JSON.stringify(messageCopy)
+	// 			) {
+	// 				// Сравниваем с messageCopy
+	// 				this.state.currentChatMessages[existingIndex] = messageCopy; // Обновляем
+	// 				messageNeedsUpdate = true;
+	// 				console.warn(
+	// 					`StateService: Message ${messageCopy.id} already exists. Updating with new data.`,
+	// 				);
+	// 			}
+	// 		}
+	// 		// -----------------------------------------
+
+	// 		// Публикуем обновление, если нужно
+	// 		if (messageNeedsUpdate) {
+	// 			this.publishStateChange();
+	// 			this.eventBus.publish('state:currentMessagesUpdated', [
+	// 				...this.state.currentChatMessages,
+	// 			]);
+	// 		}
+	// 	} else if (!isOutgoing) {
+	// 		// Входящее для неактивного чата
+	// 		const senderInfo = this.state.users.get(chatPartnerLogin);
+	// 		if (senderInfo?.isLogined) {
+	// 			// Увеличиваем счетчик только если отправитель онлайн
+	// 			this.incrementUnreadCount(chatPartnerLogin);
+	// 		}
+	// 	}
+	// }
 
 	private updateMessageStatus(
 		messageId: string,
@@ -352,6 +580,21 @@ export class StateService {
 			'state:unreadCountsUpdated',
 			new Map(this.state.unreadCounts),
 		);
+	}
+
+	private mapsAreEqual(
+		map1: Map<string, number>,
+		map2: Map<string, number>,
+	): boolean {
+		if (map1.size !== map2.size) {
+			return false;
+		}
+		for (const [key, value] of map1) {
+			if (!map2.has(key) || map2.get(key) !== value) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private publishStateChange(): void {

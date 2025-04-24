@@ -36,6 +36,7 @@ export type EventPayloadMap = {
 
 	// --- Data received event (from AuthService or other data services) ---
 	'data:userListReceived': UserInfo[];
+	'data:initialUnreadCountsReceived': Map<string, number>;
 
 	// --- State change events (from StateService) ---
 	'state:connectionStatusChanged': ConnectionStatus;

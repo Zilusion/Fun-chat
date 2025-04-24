@@ -10,6 +10,7 @@ import { AboutPage } from './components/pages/about-page/about-page';
 import { Router } from './router/router';
 import { MessageService } from './services/message-service';
 import { ConnectionStatusModalComponent } from './components/modals/connection-modal/connection-modal-component';
+import { UnreadCounterService } from './services/unread-counter-service';
 
 const SERVER_URL = 'ws://127.0.0.1:4000/';
 
@@ -17,7 +18,13 @@ const eventBus = new EventBus();
 const wsService = new WebSocketService(SERVER_URL, eventBus);
 const authService = new AuthService(wsService, eventBus);
 const messageService = new MessageService(wsService, eventBus);
-const stateService = new StateService(eventBus);
+const stateService = new StateService(eventBus, messageService);
+const unreadCounterService = new UnreadCounterService(
+	eventBus,
+	stateService,
+	messageService,
+);
+console.log(unreadCounterService);
 
 let savedLogin: string | null = null;
 let savedPassword: string | null = null;

@@ -204,36 +204,69 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 					const isLastMessageIncoming =
 						lastMessage && lastMessage.from !== currentUserLogin;
 
-					this.messages = newMessages;
+					this.messages = newMessages; // Просто обновляем локальную копию
+					// Запускаем рендер
 					this.renderMessages(
 						wasScrolledToBottom,
-						isLastMessageIncoming && isNewMessageAdded,
+						isNewMessageAdded && isLastMessageIncoming,
 					);
 
-					if (
-						isNewMessageAdded &&
-						isLastMessageIncoming &&
-						!this.shouldShowUnreadDivider
-					) {
-						console.log(
-							`ChatArea: New incoming message ${lastMessage.id} in active/read chat. Marking as read.`,
-						);
-						void this.messageService
-							.markMessageAsRead(lastMessage.id)
-							.catch((error) =>
-								console.error(
-									`ChatArea: Failed to send MSG_READ for ${lastMessage.id}`,
-									error,
-								),
-							);
-						this.stateService.resetUnreadCount(
-							this.currentChatPartner.login,
-						);
-					}
+					// --- УДАЛЕНА ВСЯ ЛОГИКА НЕМЕДЛЕННОЙ ПОМЕТКИ Read ОТСЮДА ---
+					// if ( isNewMessageAdded && isLastMessageIncoming && !isLastMessageMarkedRead && !this.unreadDividerElement ) {
+					//     // ...
+					// }
+					// ------------------------------------------------------
 				}
 			},
 		);
 		this.unsubscribeFunctions.push(unsubscribeMessages);
+		// const unsubscribeMessages = this.eventBus.subscribe(
+		// 	'state:currentMessagesUpdated',
+		// 	(newMessages: MessageData[]) => {
+		// 		if (this.currentChatPartner) {
+		// 			console.log(
+		// 				"ChatArea: Received 'state:currentMessagesUpdated'",
+		// 			);
+		// 			const wasScrolledToBottom = this.isScrolledToBottom();
+		// 			const previousMessageCount = this.messages.length;
+		// 			const isNewMessageAdded =
+		// 				newMessages.length > previousMessageCount;
+		// 			const lastMessage = newMessages.at(-1);
+		// 			const currentUserLogin =
+		// 				this.stateService.getCurrentUser()?.login;
+		// 			const isLastMessageIncoming =
+		// 				lastMessage && lastMessage.from !== currentUserLogin;
+
+		// 			this.messages = newMessages;
+		// 			this.renderMessages(
+		// 				wasScrolledToBottom,
+		// 				isLastMessageIncoming && isNewMessageAdded,
+		// 			);
+
+		// 			if (
+		// 				isNewMessageAdded &&
+		// 				isLastMessageIncoming &&
+		// 				!this.shouldShowUnreadDivider
+		// 			) {
+		// 				console.log(
+		// 					`ChatArea: New incoming message ${lastMessage.id} in active/read chat. Marking as read.`,
+		// 				);
+		// 				void this.messageService
+		// 					.markMessageAsRead(lastMessage.id)
+		// 					.catch((error) =>
+		// 						console.error(
+		// 							`ChatArea: Failed to send MSG_READ for ${lastMessage.id}`,
+		// 							error,
+		// 						),
+		// 					);
+		// 				this.stateService.resetUnreadCount(
+		// 					this.currentChatPartner.login,
+		// 				);
+		// 			}
+		// 		}
+		// 	},
+		// );
+		// this.unsubscribeFunctions.push(unsubscribeMessages);
 
 		const unsubscribeUsers = this.eventBus.subscribe(
 			'state:userListUpdated',
@@ -297,6 +330,7 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		this.unreadDividerElement?.remove();
 		this.unreadDividerElement = null;
 		this.shouldShowUnreadDivider = true;
+		// this.readActionTriggered = false;
 		this.ignoreNextScrollEvent = false;
 
 		if (userId) {
@@ -316,26 +350,30 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 	}
 
 	private loadMessages(userId: string): void {
+		// Предотвращаем повторную загрузку, если уже идет
 		if (this.isLoading) {
 			console.log('ChatArea: Message loading already in progress.');
 			return;
 		}
-		this.isLoading = true;
-		this.showLoadingState(true);
-		this.messages = [];
+		this.isLoading = true; // Устанавливаем флаг загрузки
+		this.showLoadingState(true); // Показываем индикатор загрузки и плейсхолдер
+		this.messages = []; // Очищаем локальный массив сообщений перед загрузкой
 
 		console.log(`ChatArea: Loading messages for ${userId}...`);
+		// Используем асинхронную IIFE для выполнения запроса
 		void (async (): Promise<void> => {
-			let fetchedMessages: MessageData[] | null = null;
-			let fetchError: Error | null = null;
+			let fetchedMessages: MessageData[] | null = null; // Для хранения загруженных сообщений
+			let fetchError: Error | null = null; // Для хранения ошибки
 
 			try {
+				// Выполняем запрос к API через MessageService
 				fetchedMessages =
 					await this.messageService.fetchMessages(userId);
 				console.log(
 					`ChatArea: Fetched ${fetchedMessages.length} messages for ${userId}`,
 				);
 			} catch (error) {
+				// Обрабатываем ошибку запроса
 				console.error(
 					`ChatArea: Failed to load messages for ${userId}:`,
 					error,
@@ -343,32 +381,70 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 				fetchError =
 					error instanceof Error ? error : new Error(String(error));
 			} finally {
+				// Этот блок выполнится в любом случае после try/catch
+
+				// Сбрасываем флаг загрузки НЕЗАВИСИМО от того, сменился ли чат
 				this.isLoading = false;
 
+				// Обрабатываем результат ТОЛЬКО если пользователь все еще находится в этом чате
 				if (this.stateService.getSelectedChatUserId() === userId) {
+					// Убираем индикатор загрузки (он скроет плейсхолдер "Loading")
 					this.showLoadingState(false);
 
 					if (fetchedMessages === null) {
+						// Если произошла ошибка загрузки
 						this.showPlaceholder(
 							`Failed to load messages: ${fetchError?.message ?? 'Unknown error'}`,
 						);
-						this.messages = [];
+						this.messages = []; // Убедимся, что локальный массив пуст
 						if (this.messageListElement)
-							this.messageListElement.innerHTML = '';
-						this.messageComponents.clear();
+							this.messageListElement.innerHTML = ''; // Очистим DOM
+						this.messageComponents.clear(); // Очистим кеш компонентов
+						// При ошибке загрузки считаем, что непрочитанных нет и разделитель не нужен
+						this.shouldShowUnreadDivider = false;
+						this.firstUnreadMessageId = null;
 					} else {
+						// Если загрузка УСПЕШНА
+						// 1. Проверяем, есть ли в ЗАГРУЖЕННЫХ сообщениях непрочитанные входящие
+						const hasUnreadInitially = fetchedMessages.some(
+							(message) =>
+								message.from === userId &&
+								!message.status.isReaded, // Ищем сообщения от собеседника с isReaded=false
+						);
+
+						// 2. Устанавливаем флаг shouldShowUnreadDivider в зависимости от результата проверки
+						if (hasUnreadInitially) {
+							// Если НАШЛИ непрочитанные - оставляем флаг true (он уже был установлен в true при выборе чата)
+							console.log(
+								'ChatArea: Unread messages found on load. Divider check will be performed.',
+							);
+							this.shouldShowUnreadDivider = true; // Просто для явности, он и так true
+						} else {
+							// Если НЕ НАШЛИ непрочитанных - отключаем проверку/показ разделителя для этой сессии чата
+							console.log(
+								'ChatArea: No unread messages found on load. Disabling divider check.',
+							);
+							this.shouldShowUnreadDivider = false;
+							this.firstUnreadMessageId = null; // Явно сбрасываем ID
+						}
+
+						// 3. Передаем загруженные сообщения в StateService
+						// Он опубликует событие 'state:currentMessagesUpdated'
 						this.stateService.setMessagesForCurrentChat(
 							fetchedMessages,
 						);
+						// renderMessages вызовется автоматически из подписки на это событие
 					}
 				} else {
+					// Если пользователь переключил чат во время загрузки
 					console.log(
 						'ChatArea: Load finished, but chat changed. Discarding results.',
 					);
+					// Ничего не делаем с UI, т.к. он уже для другого чата
 				}
 			}
-		})();
-	}
+		})(); // Конец async IIFE
+	} // Конец loadMessages
 
 	private updateDisplayAfterLoading(): void {
 		if (this.messages.length === 0 && this.currentChatPartner) {
@@ -705,21 +781,16 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 	}
 
 	private determineFirstUnread(): void {
-		if (this.shouldShowUnreadDivider) {
-			this.firstUnreadMessageId =
-				this.messages.find(
+		this.firstUnreadMessageId = this.shouldShowUnreadDivider
+			? (this.messages.find(
 					(message) =>
 						message.from === this.currentChatPartner?.login &&
 						!message.status.isReaded,
-				)?.id ?? null;
-			console.log(
-				'ChatArea: Determined first unread message ID:',
-				this.firstUnreadMessageId,
-			);
-		} else {
-			this.firstUnreadMessageId = null;
-		}
+				)?.id ?? null)
+			: null;
+		// Логика удаления элемента разделителя остается в renderMessages
 	}
+
 	private requestDeleteMessage = (messageId: string): void => {
 		console.log(`ChatArea: Delete requested for message ${messageId}`);
 		const confirmModal = new ConfirmModalComponent({
@@ -770,6 +841,7 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			this.unreadDividerElement = null;
 			this.shouldShowUnreadDivider = false;
 			this.firstUnreadMessageId = null;
+			this.markVisibleMessagesAsRead();
 
 			if (needsMarkingRead) {
 				this.markVisibleMessagesAsRead();
@@ -814,10 +886,7 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		this.removeUnreadDivider();
 	}
 	private handleSendClick = (): void => {
-		this.removeUnreadDivider();
-		if (!this.unreadDividerElement) {
-			this.markVisibleMessagesAsRead();
-		}
+		this.removeUnreadDivider(); // Удаляем разделитель (он вызовет markVisibleMessagesAsRead, если нужно)
 		this.submitInput();
 	};
 
@@ -829,23 +898,23 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		}
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			this.removeUnreadDivider();
-			if (!this.unreadDividerElement) {
-				this.markVisibleMessagesAsRead();
-			}
+			this.removeUnreadDivider(); // Удаляем разделитель (он вызовет markVisibleMessagesAsRead, если нужно)
 			this.submitInput();
 		}
 	};
 
 	private markVisibleMessagesAsRead(): void {
+		// Устанавливаем флаг, что действие было, и выходим, если оно уже было
 		if (!this.currentChatPartner) return;
 		console.log(
 			'ChatArea: Triggering mark as read action upon interaction.',
 		);
+		// this.readActionTriggered = true; // <-- Устанавливаем флаг ЗДЕСЬ
 
 		const currentUserLogin = this.stateService.getCurrentUser()?.login;
 		if (!currentUserLogin) return;
 
+		// Ищем ID непрочитанных ВХОДЯЩИХ
 		const unreadIncomingMessageIds = this.messages
 			.filter(
 				(message) =>
@@ -856,11 +925,11 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 
 		if (unreadIncomingMessageIds.length > 0) {
 			console.log(
-				`ChatArea: Found ${unreadIncomingMessageIds.length} unread messages to mark: [${unreadIncomingMessageIds.join(', ')}]`,
+				`ChatArea: Marking ${unreadIncomingMessageIds.length} messages as read: [${unreadIncomingMessageIds.join(', ')}]`,
 			);
 			this.stateService.resetUnreadCount(this.currentChatPartner.login);
 			unreadIncomingMessageIds.forEach((id) => {
-				console.log(`ChatArea: Sending MSG_READ for ${id}`);
+				// Отправляем запросы
 				void this.messageService
 					.markMessageAsRead(id)
 					.catch((error) =>
@@ -872,9 +941,10 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			});
 		} else {
 			console.log(
-				'ChatArea: No unread incoming messages found to mark as read.',
+				'ChatArea: No unread incoming messages found to mark as read upon interaction.',
 			);
 		}
+		// ID и разделитель уже должны были быть сброшены/удалены в removeUnreadDivider
 	}
 
 	private sendMessage(): void {
