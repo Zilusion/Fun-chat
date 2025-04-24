@@ -563,12 +563,25 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 					this.scrollToBottom('auto'),
 				);
 			} else {
-				console.log(
-					`ChatArea: Restoring scroll to ${currentScrollTop}`,
-				);
 				const newScrollHeight = this.messageListElement.scrollHeight;
-				this.messageListElement.scrollTop =
+				const newScrollTop =
 					currentScrollTop + (newScrollHeight - currentScrollHeight);
+				console.log(
+					`ChatArea: Restoring scroll to ${newScrollTop} (from ${currentScrollTop})`,
+				);
+				this.ignoreNextScrollEvent = true;
+				console.log(
+					'ChatArea: Setting ignoreNextScrollEvent = true before restoring scroll.',
+				);
+				this.messageListElement.scrollTop = newScrollTop;
+				requestAnimationFrame(() => {
+					requestAnimationFrame(() => {
+						this.ignoreNextScrollEvent = false;
+						console.log(
+							'ChatArea: Re-enabled scroll event handling after restoring scroll.',
+						);
+					});
+				});
 			}
 		}
 	}
@@ -693,7 +706,6 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 
 	private determineFirstUnread(): void {
 		if (this.shouldShowUnreadDivider) {
-			// const currentUserLogin = this.stateService.getCurrentUser()?.login;
 			this.firstUnreadMessageId =
 				this.messages.find(
 					(message) =>
@@ -748,56 +760,21 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 		}) as HTMLElement;
 	}
 
-	// private removeUnreadDivider(): void {
-	// 	if (!this.unreadDividerElement && !this.shouldShowUnreadDivider) {
-	// 		return;
-	// 	}
-
-	// 	const shouldMarkAsRead =
-	// 		this.unreadDividerElement && this.shouldShowUnreadDivider;
-
-	// 	if (this.unreadDividerElement) {
-	// 		this.unreadDividerElement.remove();
-	// 		this.unreadDividerElement = null;
-	// 	}
-
-	// 	this.shouldShowUnreadDivider = false;
-	// 	this.firstUnreadMessageId = null;
-
-	// 	if (shouldMarkAsRead) {
-	// 		console.log(
-	// 			'ChatArea: Removing unread divider due to interaction AND triggering mark as read.',
-	// 		);
-	// 		this.markVisibleMessagesAsRead();
-	// 	} else {
-	// 		console.log(
-	// 			'ChatArea: Removing unread divider (if existed) without marking as read.',
-	// 		);
-	// 	}
-	// }
 	private removeUnreadDivider(): void {
-		// Проверяем, нужно ли вообще что-то делать:
-		// Есть ли элемент И разрешено ли его показывать (т.е. пользователь еще не взаимодействовал)
 		if (this.unreadDividerElement && this.shouldShowUnreadDivider) {
 			console.log(
 				'ChatArea: Removing unread divider due to interaction AND marking as read.',
 			);
-			// 1. Запоминаем, что нужно пометить как прочитанные
 			const needsMarkingRead = true;
-			// 2. Удаляем элемент из DOM
 			this.unreadDividerElement.remove();
-			// 3. Сбрасываем ссылки и флаги показа
 			this.unreadDividerElement = null;
-			this.shouldShowUnreadDivider = false; // <-- Запрещаем показ до СЛЕДУЮЩЕЙ СМЕНЫ чата
+			this.shouldShowUnreadDivider = false;
 			this.firstUnreadMessageId = null;
 
-			// 4. Вызываем пометку прочитанными, если это было необходимо
 			if (needsMarkingRead) {
 				this.markVisibleMessagesAsRead();
 			}
 		} else if (this.unreadDividerElement) {
-			// Если элемент есть, но shouldShowUnreadDivider уже false - просто убираем элемент
-			// (На случай, если renderMessages не успел его убрать)
 			console.log(
 				'ChatArea: Removing unread divider (was already marked as read implicitly).',
 			);
@@ -805,7 +782,6 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 			this.unreadDividerElement = null;
 			this.firstUnreadMessageId = null;
 		}
-		// Если элемента нет, ничего не делаем
 	}
 
 	private scrollOnOpen(): void {
@@ -899,12 +875,6 @@ export class ChatAreaComponent extends BaseComponent<HTMLElement> {
 				'ChatArea: No unread incoming messages found to mark as read.',
 			);
 		}
-		// this.firstUnreadMessageId = null;
-		// if (this.unreadDividerElement) {
-		// 	this.unreadDividerElement.remove();
-		// 	this.unreadDividerElement = null;
-		// }
-		// this.shouldShowUnreadDivider = false;
 	}
 
 	private sendMessage(): void {
