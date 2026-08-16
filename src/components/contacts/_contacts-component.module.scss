@@ -1,0 +1,115 @@
+@use '../../styles/base/mixins' as mixins;
+
+.contacts {
+	overflow-y: hidden;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 1rem;
+	border-right: 1px solid var(--color-border);
+	background-color: var(--color-surface);
+}
+
+.search-input {
+	width: 100%;
+	margin-bottom: 1rem;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	font-size: var(--font-size-sm);
+	outline: none;
+	transition: var(--transition);
+
+	&:focus {
+		border-color: var(--color-border-focus);
+		box-shadow: 0 0 0 2px rgba(var(--color-border-focus-rgb), 0.2);
+	}
+}
+
+.contacts-list {
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+	gap: 0.1rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.contacts-item {
+	cursor: pointer;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.5rem 0.8rem 0.5rem 22px;
+	border-radius: var(--border-radius);
+	white-space: nowrap;
+	transition: background-color 0.15s ease-in-out;
+
+	&::before {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 7px;
+		transform: translateY(-50%);
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		transition: background-color 0.2s ease;
+	}
+
+	> span:first-child {
+		overflow: hidden;
+		flex-grow: 1;
+		margin-right: 0.5rem;
+		text-overflow: ellipsis;
+	}
+
+	&:hover {
+		background-color: var(--color-secondary);
+	}
+
+	&--active {
+		background-color: rgba(var(--color-primary-rgb), 0.15);
+	}
+
+	&--online {
+		&::before {
+			background-color: var(--color-success);
+		}
+	}
+
+	&--offline {
+		&::before {
+			background-color: var(--color-text-secondary);
+		}
+	}
+
+	&--unread {
+		> span:first-child {
+			font-weight: 500;
+		}
+	}
+}
+
+.unread-badge {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	margin-left: auto;
+	padding: 0 5px;
+	border-radius: 50%;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--color-text-on-primary);
+	background-color: var(--color-accent);
+
+	&.hidden {
+		display: none;
+	}
+}

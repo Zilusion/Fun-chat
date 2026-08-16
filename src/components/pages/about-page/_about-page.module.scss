@@ -1,0 +1,33 @@
+.page {
+	display: grid;
+	place-items: center;
+	height: 100%;
+}
+
+.container {
+	display: grid;
+	gap: 1rem;
+	place-items: center;
+	width: 100%;
+	max-width: 600px;
+}
+
+.title {
+	font-size: var(--font-size-xl);
+	font-weight: 600;
+}
+
+.text {
+	max-width: 400px;
+	text-align: justify;
+}
+
+.creator {
+	border-bottom: 2px solid transparent;
+	font-size: var(--font-size-md);
+	transition: var(--transition);
+
+	&:hover {
+		border-bottom-color: var(--color-border-focus);
+	}
+}

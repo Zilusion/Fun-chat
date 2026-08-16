@@ -1,0 +1,41 @@
+@use '../../styles/base/variables' as *;
+@use '../../styles/base/mixins' as mixins;
+
+.header {
+	height: var(--header-height);
+	border-bottom: 1px solid var(--color-border);
+	background-color: var(--color-surface);
+	box-shadow: var(--shadow-sm);
+}
+
+.container {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1rem;
+	place-items: center;
+	height: 100%;
+}
+
+.current-user {
+	font-size: var(--font-size-md);
+
+	@include mixins.media-md {
+		font-size: var(--font-size-sm);
+	}
+}
+
+.app-name {
+	font-size: var(--font-size-lg);
+	font-weight: 600;
+	color: var(--color-text-primary);
+
+	@include mixins.media-md {
+		font-size: var(--font-size-md);
+	}
+}
+
+.buttons {
+	display: flex;
+	gap: 0.75rem;
+	align-items: center;
+}
